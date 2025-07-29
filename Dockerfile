@@ -39,6 +39,8 @@ COPY src/ ./src/
 # Build the application
 RUN pnpm run build
 
+COPY src/assets /app/dist/assets
+
 # Expose port 3000
 EXPOSE 3000
 
