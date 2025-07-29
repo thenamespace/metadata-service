@@ -4,15 +4,33 @@ import {
   CanvasGradient,
   loadImage,
   CanvasRenderingContext2D,
+  registerFont
 } from 'canvas';
 import * as path from 'path';
 
 const IMAGE_SIZE = 1000;
+const MAX_LABEL_LEN = 18;
 const namespaceLogo = path.resolve(
   __dirname,
   '../assets/logo',
   'ninja-logo.png',
 );
+const pizzadaoLogo = path.resolve(
+  __dirname,
+  "../assets/logo",
+  "pizzadao_logo.jpeg"
+)
+
+// These are custom metadata logos for some clients
+// pizzadao, we should make this dynamic in the future
+const customLogos: Record<string, string> = {
+  "pizzadao.eth": pizzadaoLogo,
+  "pizzamafia.eth": pizzadaoLogo,
+  "rarepizzas": pizzadaoLogo,
+}
+
+const FONT_PATH = path.resolve(__dirname, '../assets/fonts', 'Satoshi-Bold.otf');
+registerFont(FONT_PATH, { family: 'Satoshi' });
 
 interface ImageCache {
   generated: number;
@@ -25,7 +43,11 @@ const MAX_NAME_LEN = 40;
 export class ImageService {
   private imageCache: Record<string, ImageCache> = {};
 
-  public getImageForName = async (fullName: string, avatar?: string) => {
+  public getCachedImage(node: string) {
+    return this.imageCache[node];
+  }
+
+  public generateImageForName = async (fullName: string, avatar?: string) => {
     if (this.imageCache[fullName]) {
       return this.imageCache[fullName].stream;
     }
@@ -52,21 +74,37 @@ export class ImageService {
     }
 
     await this.attachLogoToImage(ctx);
+    await this.attachCustomLogo(fullName, ctx);
     this.attachText(ctx, fullName);
 
     return canvas.toBuffer();
   };
 
   private attachText = (ctx: CanvasRenderingContext2D, text: string) => {
-    ctx.shadowColor = 'rgba(99, 99, 99, 0.5)';
+    ctx.shadowColor = 'rgba(99, 99, 99, 0.7)';
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
     ctx.shadowBlur = 8;
+    const split = text.split(".");
 
     ctx.fillStyle = 'white';
-    ctx.font = this.determineFontSize(text) + ' sans-serif';
     ctx.textAlign = 'start';
-    ctx.fillText(this.shortenText(text), 100, 900);
+
+    if (split.length <= 2) {
+      ctx.font = this.getFontSize() + ' Satoshi';
+      ctx.fillText(text, 100, 900);
+    } else {
+      const subnameLabel = split.slice(0, -2).join('.');
+      const parentName = `${split[split.length - 2]}.${split[split.length - 1]}`;
+
+      ctx.font = this.getFontSize() + ' Satoshi';
+      ctx.fillText(`${this.shortenText(subnameLabel, MAX_LABEL_LEN)}.`, 100, 820);
+
+      ctx.globalAlpha = 0.7;
+      ctx.font = this.getFontSize() + ' Satoshi';
+      ctx.fillText(`${this.shortenText(parentName, MAX_LABEL_LEN)}`, 100, 900);
+      ctx.globalAlpha = 1;
+    }
   };
 
   private attachLogoToImage = async (ctx: CanvasRenderingContext2D) => {
@@ -74,15 +112,52 @@ export class ImageService {
     ctx.drawImage(ninjaLogoImg, 100, 100, 150, 150);
   };
 
+  private attachCustomLogo = async (fullName: string, ctx: CanvasRenderingContext2D) => {
+
+    let parentName = fullName;
+    const split = parentName.split(".");
+    if (split.length > 2) {
+      parentName = `${split[split.length -2]}.${split[split.length - 1]}`;
+    }
+
+    if (customLogos[parentName]) {
+
+        try {
+          const customLogoUrl = customLogos[parentName];
+          const customLogo = await loadImage(customLogoUrl);
+          ctx.drawImage(customLogo, 700, 100, 150, 150);
+        } catch(err) {
+          Logger.error("Failed to attach custom logo", err);
+        }
+    }
+  }
+
   private createAvatarBg = async (
     ctx: CanvasRenderingContext2D,
     bgImage: string,
   ) => {
-    const img = await loadImage(this.cdnWrap(bgImage));
-    ctx.drawImage(img, 10, 10, IMAGE_SIZE, IMAGE_SIZE);
+
+    try {
+      const img = await loadImage(bgImage);
+      ctx.drawImage(img, 0, 0, IMAGE_SIZE, IMAGE_SIZE);
+    } catch (err) {
+      Logger.error("Failed to apply avatar to bg", err);
+    }
   };
 
   private createGradiantBg = (ctx: CanvasRenderingContext2D) => {
+    const gradient: CanvasGradient = this.defaultGradiant(ctx);
+
+    ctx.shadowColor = 'rgba(99, 99, 99, 1)';
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 3;
+    ctx.shadowBlur = 8;
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, IMAGE_SIZE, IMAGE_SIZE);
+  };
+
+  private defaultGradiant = (ctx: CanvasRenderingContext2D) => {
     const gradient: CanvasGradient = ctx.createLinearGradient(
       0,
       0,
@@ -92,43 +167,18 @@ export class ImageService {
     gradient.addColorStop(0, '#7990f7');
     gradient.addColorStop(1, '#44bcf0');
 
-    ctx.shadowColor = 'rgba(99, 99, 99, 0.5)';
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 3;
-    ctx.shadowBlur = 8;
+    return gradient;
+  }
 
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, IMAGE_SIZE, IMAGE_SIZE);
+  private getFontSize = () => {
+    return "105px";
   };
 
-  private determineFontSize = (name: string) => {
-    const nameLen = name.length;
-    if (nameLen <= 21) {
-      return '70px';
-    } else if (nameLen <= 25) {
-      return '65px';
-    } else if (nameLen <= 30) {
-      return '55px';
-    } else {
-      return '40px';
-    }
-  };
-
-  private shortenText = (name: string) => {
-    if (name.length > MAX_NAME_LEN) {
-      return name.substring(0, MAX_NAME_LEN - 3) + '...';
+  private shortenText = (name: string, max_len: number) => {
+    if (name.length > max_len) {
+      return name.substring(0, 6) + '...' + name.substring(name.length - 6); 
     }
 
     return name;
-  };
-
-  // there is an issue with digital ocean and imgur,
-  // imgur doesn't allow image request from digitalocean servers for some reason
-  private cdnWrap = (value: string) => {
-    const isImgur = value.includes('imgur');
-    if (isImgur) {
-      return `https://wrpcd.net/cdn-cgi/image/anim=false,fit=contain,f=auto,w=288/${value}`;
-    }
-    return value;
   };
 }

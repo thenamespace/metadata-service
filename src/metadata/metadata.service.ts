@@ -22,6 +22,7 @@ export class MetadataService {
       node = this.tokenIdToBytes32(tokenId);
       chainId = parseInt(chainIdStr, 10);
 
+
       if (isNaN(chainId)) {
         throw new Error('Invalid chain ID');
       }
@@ -68,11 +69,16 @@ export class MetadataService {
       if (!networkName) {
         throw Error('Unsupported chainId');
       }
+
+      const cachedImage = this.avatarService.getCachedImage(node);
+      if (cachedImage && cachedImage.stream) {
+        return cachedImage.stream;
+      }
     } catch {
       throw new BadRequestException('Invalid parameters');
     }
     const nodeDTO = await this.subnameService.getL2Subname(node, chainId);
-    return this.avatarService.getImageForName(nodeDTO.name, nodeDTO.avatar);
+    return this.avatarService.generateImageForName(nodeDTO.name, nodeDTO.avatar);
   }
 
   private tokenIdToBytes32(tokenId: string) {
