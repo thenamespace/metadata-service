@@ -28,7 +28,7 @@ export class SubnamesClientService {
       );
 
       const response = await this.httpClient.get(
-        `/l2-subnames/network/${chainId}/subname/${encodeURIComponent(namehashOrName)}`,
+        `/api/v1/l2-subnames/chainid/${chainId}/namehash/${namehashOrName}`,
       );
 
       return response.data as L2SubnameResponse;

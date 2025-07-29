@@ -27,7 +27,7 @@ importers:
         specifier: ^1.7.5
         version: 1.11.0
       canvas:
-        specifier: ^3.1.0
+        specifier: 3.1.2
         version: 3.1.2
       class-transformer:
         specifier: ^0.5.1
