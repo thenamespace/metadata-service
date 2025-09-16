@@ -33,10 +33,16 @@ export class EnsService {
   async assertOwnerOrThrow(params: { subname: string; address: string }): Promise<void> {
     const { subname, address } = params;
     const ens = subname.trim();
-    if (!ens || ens.includes('..')) {
+    if (!ens) {
       throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { subname } });
     }
-    const owner = await this.getOwner(ens);
+    let normalized: string;
+    try {
+      normalized = normalize(ens);
+    } catch {
+      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { subname } });
+    }
+    const owner = await this.getOwner(normalized);
     if (!owner || owner.toLowerCase() !== address.toLowerCase()) {
       throw new ForbiddenException({ code: ErrorCodes.NOT_SUBNAME_OWNER, details: { subname } });
     }

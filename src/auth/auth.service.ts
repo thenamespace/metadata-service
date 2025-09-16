@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SiweMessage } from 'siwe';
+import { generateSiweNonce } from 'viem/siwe';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 
 type NonceRecord = { nonce: string; issuedAt: number };
@@ -15,7 +16,7 @@ export class AuthService {
     if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
       throw new BadRequestException({ code: ErrorCodes.INVALID_ADDRESS, details: { address } });
     }
-    const nonce = this.randomNonce();
+    const nonce = generateSiweNonce();
     const issuedAt = Date.now();
     this.addressToNonce.set(address.toLowerCase(), { nonce, issuedAt });
 
@@ -85,13 +86,7 @@ export class AuthService {
     return { token, address: lower, expiresIn };
   }
 
-  private randomNonce(): string {
-    return [...crypto.getRandomValues(new Uint8Array(16))]
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
 
-  // Intentionally no pre-built SIWE message: clients construct EIP-4361 with their own domain/uri
 }
 
 
