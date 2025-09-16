@@ -50,7 +50,7 @@ export class AvatarService {
 
   // Defaults can be overridden by env vars
   private readonly maxAvatarBytes = Number(process.env.MAX_AVATAR_BYTES_IN_MB || 2 * 1024 * 1024); // 2MB
-  private readonly maxHeaderBytes = Number(process.env.MAX_HEADER_BYTES_IN_MB || 5 * 1024 * 1024); // 1.5MB
+  private readonly maxHeaderBytes = Number(process.env.MAX_HEADER_BYTES_IN_MB || 5 * 1024 * 1024); // 5MB
 
   constructor(private readonly storageService: StorageService) {}
 

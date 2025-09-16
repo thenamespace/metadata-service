@@ -8,18 +8,17 @@ import {
   Param,
   Post,
   Req,
-  UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { StorageService } from '../storage/storage.service';
 import { EnsService } from '../ens/ens.service';
 import { DeleteRateLimit, UploadRateLimit } from '../rate-limit/rate-limit.decorators';
-import { AuthGuard } from '@nestjs/passport';
 import { Logger } from '@nestjs/common';
 import { FileType } from '../common/enums/file-type.enum';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 import { AvatarUploadResponseDto, DeleteResponseDto, HeaderUploadResponseDto } from './dto/avatar-responses.dto';
 import { AvatarService, UploadResult } from './avatar.service';
+import { AuthService } from '../auth/auth.service';
 
 type MultipartBufferFile = {
   filename: string;
@@ -39,21 +38,22 @@ type MultipartStreamFile = {
 
 
 interface LocalRequest {
-  user?: { address?: string };
   body?: {
     avatar?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
     header?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
     file?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
     image?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
+    siweMessage?: unknown;
+    siweSignature?: unknown;
+    address?: unknown;
   };
 }
 
 /**
  * Avatar controller for uploading, updating, deleting avatar and header images.
- * Requires JWT auth and ENS ownership for mutations.
+ * Requires SIWE signature and ENS ownership for mutations.
  */
 @ApiTags('avatar')
-@ApiBearerAuth()
 @Controller('avatar')
 export class AvatarController {
   private readonly logger = new Logger(AvatarController.name);
@@ -61,11 +61,25 @@ export class AvatarController {
     private readonly storageService: StorageService,
     private readonly ensService: EnsService,
     private readonly avatarService: AvatarService,
+    private readonly authService: AuthService,
   ) {}
+
+  private getTextField(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+      const v = (value as Record<string, unknown>).value;
+      return typeof v === 'string' ? v : '';
+    }
+    return '';
+  }
+
+  private normalizeMessageNewlines(message: string): string {
+    // Allow users to pass messages with literal \n sequences via curl/Swagger
+    return message.replace(/\\n/g, '\n');
+  }
 
   @Post(':subname')
   @UploadRateLimit()
-  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Upload or update avatar for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @ApiConsumes('multipart/form-data')
@@ -78,8 +92,11 @@ export class AvatarController {
           format: 'binary',
           description: 'Image file (jpg, jpeg, png, gif, webp)',
         },
+        siweMessage: { type: 'string', description: 'SIWE message string' },
+        siweSignature: { type: 'string', description: 'Signature for SIWE message' },
+        address: { type: 'string', description: 'Wallet address (checks against SIWE)' },
       },
-      required: ['avatar'],
+      required: ['avatar', 'siweMessage', 'siweSignature', 'address'],
     },
   })
   @ApiOkResponse({
@@ -102,10 +119,14 @@ export class AvatarController {
   ) {
     const r = req as LocalRequest;
     this.logger.log({ msg: 'Upload hit', subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
-    const userAddress = r.user?.address;
-    this.logger.log({ msg: 'Auth info', userAddressPresent: !!userAddress });
-    if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
-    await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
+    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
+    const signature = this.getTextField(r.body?.siweSignature);
+    const address = this.getTextField(r.body?.address);
+    if (!message || !signature || !address) {
+      throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
+    }
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
 
     const result: UploadResult = await this.avatarService.upload(subname, req, FileType.AVATAR);
     return {
@@ -119,7 +140,6 @@ export class AvatarController {
 
   @Delete(':subname')
   @DeleteRateLimit()
-  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Delete avatar for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @HttpCode(HttpStatus.OK)
@@ -139,10 +159,14 @@ export class AvatarController {
     @Req() req: unknown,
   ) {
     const r = req as LocalRequest;
-    const userAddress = r.user?.address;
-    this.logger.log({ msg: 'Delete hit', subname, userAddressPresent: !!userAddress });
-    if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
-    await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
+    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
+    const signature = this.getTextField(r.body?.siweSignature);
+    const address = this.getTextField(r.body?.address);
+    if (!message || !signature || !address) {
+      throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
+    }
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
 
     const deleted = await this.avatarService.delete(subname, FileType.AVATAR);
     this.logger.log({ msg: 'Delete result', subname, deleted });
@@ -159,7 +183,6 @@ export class AvatarController {
 
   @Post(':subname/header')
   @UploadRateLimit()
-  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Upload or update header image for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @ApiConsumes('multipart/form-data')
@@ -172,8 +195,11 @@ export class AvatarController {
           format: 'binary',
           description: 'Header image file (jpg, jpeg, png, gif, webp)',
         },
+        siweMessage: { type: 'string', description: 'SIWE message string' },
+        siweSignature: { type: 'string', description: 'Signature for SIWE message' },
+        address: { type: 'string', description: 'Wallet address (checks against SIWE)' },
       },
-      required: ['header'],
+      required: ['header', 'siweMessage', 'siweSignature', 'address'],
     },
   })
   @ApiOkResponse({
@@ -196,10 +222,14 @@ export class AvatarController {
   ) {
     const r = req as LocalRequest;
     this.logger.log({ msg: 'Header upload hit', subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
-    const userAddress = r.user?.address;
-    this.logger.log({ msg: 'Auth info', userAddressPresent: !!userAddress });
-    if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
-    await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
+    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
+    const signature = this.getTextField(r.body?.siweSignature);
+    const address = this.getTextField(r.body?.address);
+    if (!message || !signature || !address) {
+      throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
+    }
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
 
     const result: UploadResult = await this.avatarService.upload(subname, req, FileType.HEADER);
     return {
@@ -213,7 +243,6 @@ export class AvatarController {
 
   @Delete(':subname/header')
   @DeleteRateLimit()
-  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Delete header image for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @HttpCode(HttpStatus.OK)
@@ -233,10 +262,14 @@ export class AvatarController {
     @Req() req: unknown,
   ) {
     const r = req as LocalRequest;
-    const userAddress = r.user?.address;
-    this.logger.log({ msg: 'Header delete hit', subname, userAddressPresent: !!userAddress });
-    if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
-    await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
+    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
+    const signature = this.getTextField(r.body?.siweSignature);
+    const address = this.getTextField(r.body?.address);
+    if (!message || !signature || !address) {
+      throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
+    }
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
 
     const deleted = await this.avatarService.delete(subname, FileType.HEADER);
     this.logger.log({ msg: 'Header delete result', subname, deleted });

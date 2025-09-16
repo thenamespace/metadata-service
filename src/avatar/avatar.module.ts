@@ -2,11 +2,11 @@ import { Module } from '@nestjs/common';
 import { AvatarController } from './avatar.controller';
 import { StorageModule } from '../storage/storage.module';
 import { EnsService } from '../ens/ens.service';
-import { JwtModule } from '@nestjs/jwt';
 import { AvatarService } from './avatar.service';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [JwtModule.register({}), StorageModule],
+  imports: [StorageModule, AuthModule],
   controllers: [AvatarController],
   providers: [EnsService, AvatarService],
 })
