@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { SiweMessage } from 'siwe';
 import { generateSiweNonce } from 'viem/siwe';
+import { isAddress } from 'viem';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 
 type Scope = 'avatar' | 'header' | 'avatar+header';
@@ -20,7 +21,7 @@ export class AuthService {
   constructor() {}
 
   generateNonce(address: string, scope?: Scope): { nonce: string; expiresAt: number } {
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    if (!isAddress(address)) {
       throw new BadRequestException({ code: ErrorCodes.INVALID_ADDRESS, details: { address } });
     }
     const nonce = generateSiweNonce();
@@ -47,7 +48,7 @@ export class AuthService {
   }): Promise<{ address: string }> {
     const { action, message, signature, address } = params;
 
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    if (!isAddress(address)) {
       throw new BadRequestException({ code: ErrorCodes.INVALID_ADDRESS, details: { address } });
     }
     const lower = address.toLowerCase();
@@ -129,8 +130,6 @@ export class AuthService {
 
     return { address: lower };
   }
-
-
 }
 
 
