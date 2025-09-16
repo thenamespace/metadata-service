@@ -20,6 +20,7 @@ import { AvatarUploadResponseDto, DeleteResponseDto, HeaderUploadResponseDto } f
 import { AvatarDeleteDto, HeaderDeleteDto } from './dto/avatar-upload.dto';
 import { AvatarService, UploadResult } from './avatar.service';
 import { AuthService } from '../auth/auth.service';
+import { Network, isValidNetwork } from '../common/enums/network.enum';
 
 type MultipartBufferFile = {
   filename: string;
@@ -79,9 +80,10 @@ export class AvatarController {
     return message.replace(/\\n/g, '\n');
   }
 
-  @Post(':subname/avatar')
+  @Post(':network/:subname/avatar')
   @UploadRateLimit()
   @ApiOperation({ summary: 'Upload or update avatar for a subname' })
+  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -127,11 +129,16 @@ export class AvatarController {
   })
   @HttpCode(HttpStatus.OK)
   async upload(
+    @Param('network') network: string,
     @Param('subname') subname: string,
     @Req() req: unknown,
   ) {
+    if (!isValidNetwork(network)) {
+      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+    }
+
     const r = req as LocalRequest;
-    this.logger.log({ msg: 'Upload hit', subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
+    this.logger.log({ msg: 'Upload hit', network, subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
     const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);
@@ -139,11 +146,12 @@ export class AvatarController {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
 
-    const result: UploadResult = await this.avatarService.upload(subname, req, FileType.AVATAR);
+    const result: UploadResult = await this.avatarService.upload(subname, network as Network, req, FileType.AVATAR);
     return {
       subname,
+      network,
       avatarUrl: result.url,
       uploadedAt: result.uploadedAt,
       fileSize: result.fileSize,
@@ -151,9 +159,10 @@ export class AvatarController {
     };
   }
 
-  @Delete(':subname/avatar')
+  @Delete(':network/:subname/avatar')
   @DeleteRateLimit()
   @ApiOperation({ summary: 'Delete avatar for a subname' })
+  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @ApiBody({ type: AvatarDeleteDto })
   @HttpCode(HttpStatus.OK)
@@ -169,29 +178,36 @@ export class AvatarController {
     },
   })
   async delete(
+    @Param('network') network: string,
     @Param('subname') subname: string,
     @Body() dto: AvatarDeleteDto,
   ) {
+    if (!isValidNetwork(network)) {
+      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+    }
+
     const message = this.normalizeMessageNewlines(dto.siweMessage);
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature: dto.siweSignature, address: dto.address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
 
-    const deleted = await this.avatarService.delete(subname, FileType.AVATAR);
-    this.logger.log({ msg: 'Delete result', subname, deleted });
+    const deleted = await this.avatarService.delete(subname, network as Network, FileType.AVATAR);
+    this.logger.log({ msg: 'Delete result', network, subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
     }
 
     return {
       subname,
+      network,
       message: 'Avatar deleted successfully',
       deletedAt: new Date().toISOString(),
     };
   }
 
-  @Post(':subname/header')
+  @Post(':network/:subname/header')
   @UploadRateLimit()
   @ApiOperation({ summary: 'Upload or update header image for a subname' })
+  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -237,11 +253,16 @@ export class AvatarController {
   })
   @HttpCode(HttpStatus.OK)
   async uploadHeader(
+    @Param('network') network: string,
     @Param('subname') subname: string,
     @Req() req: unknown,
   ) {
+    if (!isValidNetwork(network)) {
+      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+    }
+
     const r = req as LocalRequest;
-    this.logger.log({ msg: 'Header upload hit', subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
+    this.logger.log({ msg: 'Header upload hit', network, subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
     const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);
@@ -249,11 +270,12 @@ export class AvatarController {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
 
-    const result: UploadResult = await this.avatarService.upload(subname, req, FileType.HEADER);
+    const result: UploadResult = await this.avatarService.upload(subname, network as Network, req, FileType.HEADER);
     return {
       subname,
+      network,
       headerUrl: result.url,
       uploadedAt: result.uploadedAt,
       fileSize: result.fileSize,
@@ -261,9 +283,10 @@ export class AvatarController {
     };
   }
 
-  @Delete(':subname/header')
+  @Delete(':network/:subname/header')
   @DeleteRateLimit()
   @ApiOperation({ summary: 'Delete header image for a subname' })
+  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
   @ApiBody({ type: HeaderDeleteDto })
   @HttpCode(HttpStatus.OK)
@@ -279,21 +302,27 @@ export class AvatarController {
     },
   })
   async deleteHeader(
+    @Param('network') network: string,
     @Param('subname') subname: string,
     @Body() dto: HeaderDeleteDto,
   ) {
+    if (!isValidNetwork(network)) {
+      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+    }
+
     const message = this.normalizeMessageNewlines(dto.siweMessage);
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature: dto.siweSignature, address: dto.address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
 
-    const deleted = await this.avatarService.delete(subname, FileType.HEADER);
-    this.logger.log({ msg: 'Header delete result', subname, deleted });
+    const deleted = await this.avatarService.delete(subname, network as Network, FileType.HEADER);
+    this.logger.log({ msg: 'Header delete result', network, subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
     }
 
     return {
       subname,
+      network,
       message: 'Header deleted successfully',
       deletedAt: new Date().toISOString(),
     };

@@ -3,6 +3,7 @@ import { Storage } from '@google-cloud/storage';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { FileType, StorageMode } from '../common/enums/file-type.enum';
+import { Network, getNetworkPath } from '../common/enums/network.enum';
 
 /**
  * Storage service for saving, reading, and deleting avatar and header files.
@@ -58,10 +59,11 @@ export class StorageService {
   /**
    * Build a public URL for the stored file; adds a cache-busting timestamp on updates.
    */
-  getPublicUrl(subname: string, type: FileType = FileType.AVATAR, timestamp?: string): string {
-    const basePath = `subname/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`;
+  getPublicUrl(subname: string, network: Network, type: FileType = FileType.AVATAR, timestamp?: string): string {
+    const networkPath = getNetworkPath(network);
+    const basePath = `${networkPath}subname/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`;
     const baseUrl = this.mode === StorageMode.LOCAL
-      ? `/static/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`
+      ? `/static/${networkPath}subname/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`
       : `https://${this.bucketName}/${basePath}`;
     return timestamp ? `${baseUrl}?timestamp=${timestamp}` : baseUrl;
   }
@@ -69,12 +71,13 @@ export class StorageService {
   /**
    * Save a file to the configured storage backend with content type metadata.
    */
-  async save(subname: string, buffer: Buffer, type: FileType = FileType.AVATAR, contentType: string): Promise<void> {
+  async save(subname: string, network: Network, buffer: Buffer, type: FileType = FileType.AVATAR, contentType: string): Promise<void> {
     const fileName = type === FileType.HEADER ? 'header' : 'avatar';
-    const filePath = `subname/${subname}/${fileName}`;
+    const networkPath = getNetworkPath(network);
+    const filePath = `${networkPath}subname/${subname}/${fileName}`;
     
     if (this.mode === StorageMode.LOCAL) {
-      const root = path.resolve(process.cwd(), 'public', subname);
+      const root = path.resolve(process.cwd(), 'public', networkPath, 'subname', subname);
       await fs.mkdir(root, { recursive: true });
       await fs.writeFile(path.join(root, fileName), buffer);
       return;
@@ -97,12 +100,13 @@ export class StorageService {
   /**
    * Delete a stored file; returns true if deleted or existed, false if missing.
    */
-  async delete(subname: string, type: FileType = FileType.AVATAR): Promise<boolean> {
+  async delete(subname: string, network: Network, type: FileType = FileType.AVATAR): Promise<boolean> {
     const fileName = type === FileType.HEADER ? 'header' : 'avatar';
-    const filePath = `subname/${subname}/${fileName}`;
+    const networkPath = getNetworkPath(network);
+    const filePath = `${networkPath}subname/${subname}/${fileName}`;
     
     if (this.mode === StorageMode.LOCAL) {
-      const p = path.resolve(process.cwd(), 'public', subname, fileName);
+      const p = path.resolve(process.cwd(), 'public', networkPath, 'subname', subname, fileName);
       try {
         await fs.rm(p, { force: true });
         return true;
@@ -125,12 +129,13 @@ export class StorageService {
   /**
    * Download a stored file and return its buffer and content type if present.
    */
-  async getFileBuffer(subname: string, type: FileType): Promise<{ buffer: Buffer; contentType: string } | null> {
+  async getFileBuffer(subname: string, network: Network, type: FileType): Promise<{ buffer: Buffer; contentType: string } | null> {
     const fileName = type === FileType.HEADER ? 'header' : 'avatar';
-    const filePath = `subname/${subname}/${fileName}`;
+    const networkPath = getNetworkPath(network);
+    const filePath = `${networkPath}subname/${subname}/${fileName}`;
     
     if (this.mode === StorageMode.LOCAL) {
-      const p = path.resolve(process.cwd(), 'public', subname, fileName);
+      const p = path.resolve(process.cwd(), 'public', networkPath, 'subname', subname, fileName);
       try {
         const buffer = await fs.readFile(p);
         // Try to detect content type from file extension or use default

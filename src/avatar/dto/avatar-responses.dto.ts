@@ -4,6 +4,9 @@ export class AvatarUploadResponseDto {
   @ApiProperty({ example: 'avatar.offchainsub.eth' })
   subname!: string;
 
+  @ApiProperty({ example: 'mainnet', enum: ['mainnet', 'sepolia'] })
+  network!: string;
+
   @ApiProperty({ example: 'https://avatars.namespace.ninja/subname/avatar.offchainsub.eth/avatar?timestamp=1757935476031' })
   avatarUrl!: string;
 
@@ -21,6 +24,9 @@ export class HeaderUploadResponseDto {
   @ApiProperty({ example: 'avatar.offchainsub.eth' })
   subname!: string;
 
+  @ApiProperty({ example: 'mainnet', enum: ['mainnet', 'sepolia'] })
+  network!: string;
+
   @ApiProperty({ example: 'https://avatars.namespace.ninja/subname/avatar.offchainsub.eth/header' })
   headerUrl!: string;
 
@@ -37,6 +43,9 @@ export class HeaderUploadResponseDto {
 export class DeleteResponseDto {
   @ApiProperty({ example: 'avatar.offchainsub.eth' })
   subname!: string;
+
+  @ApiProperty({ example: 'mainnet', enum: ['mainnet', 'sepolia'] })
+  network!: string;
 
   @ApiProperty({ example: 'Avatar deleted successfully' })
   message!: string;

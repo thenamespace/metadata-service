@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { FileType, SupportedMimeTypes } from '../common/enums/file-type.enum';
 import { StorageService } from '../storage/storage.service';
+import { Network } from '../common/enums/network.enum';
 
 type MultipartBufferFile = {
   filename: string;
@@ -54,23 +55,23 @@ export class AvatarService {
 
   constructor(private readonly storageService: StorageService) {}
 
-  async upload(subname: string, req: unknown, type: FileType): Promise<UploadResult> {
+  async upload(subname: string, network: Network, req: unknown, type: FileType): Promise<UploadResult> {
     const { buffer, mimetype } = await this.extractFileFromRequest(req, type);
     this.validate(buffer, mimetype, type);
 
-    const existingFile = await this.storageService.getFileBuffer(subname, type);
+    const existingFile = await this.storageService.getFileBuffer(subname, network, type);
     const isUpdate = !!existingFile;
 
-    await this.storageService.save(subname, buffer, type, mimetype);
+    await this.storageService.save(subname, network, buffer, type, mimetype);
     const timestamp = isUpdate ? Date.now().toString() : undefined;
-    const url = this.storageService.getPublicUrl(subname, type, timestamp);
+    const url = this.storageService.getPublicUrl(subname, network, type, timestamp);
 
-    this.logger.log({ msg: 'Stored image', subname, type, url, isUpdate, size: buffer.length });
+    this.logger.log({ msg: 'Stored image', subname, network, type, url, isUpdate, size: buffer.length });
     return { url, uploadedAt: new Date().toISOString(), fileSize: buffer.length, isUpdate };
   }
 
-  async delete(subname: string, type: FileType): Promise<boolean> {
-    const deleted = await this.storageService.delete(subname, type);
+  async delete(subname: string, network: Network, type: FileType): Promise<boolean> {
+    const deleted = await this.storageService.delete(subname, network, type);
     return deleted;
   }
 

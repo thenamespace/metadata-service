@@ -110,22 +110,27 @@ http://localhost:3000/api
 
 ### Profile
 
-- `POST /profile/{subname}/avatar` - Upload or update avatar image for a subname
+- `POST /profile/{network}/{subname}/avatar` - Upload or update avatar image for a subname
   - Auth: SIWE signature verification (no JWT required)
   - Content-Type: `multipart/form-data` with fields: `avatar`, `siweMessage`, `siweSignature`, `address`
-  - Response: `{ subname, avatarUrl, uploadedAt, fileSize, isUpdate }`
-- `DELETE /profile/{subname}/avatar` - Delete avatar image for a subname
+  - Response: `{ subname, network, avatarUrl, uploadedAt, fileSize, isUpdate }`
+- `DELETE /profile/{network}/{subname}/avatar` - Delete avatar image for a subname
   - Auth: SIWE signature verification (no JWT required)
   - Body: `{ "siweMessage": string, "siweSignature": string, "address": string }`
-  - Response: `{ subname, message, deletedAt }`
-- `POST /profile/{subname}/header` - Upload or update header image for a subname
+  - Response: `{ subname, network, message, deletedAt }`
+- `POST /profile/{network}/{subname}/header` - Upload or update header image for a subname
   - Auth: SIWE signature verification (no JWT required)
   - Content-Type: `multipart/form-data` with fields: `header`, `siweMessage`, `siweSignature`, `address`
-  - Response: `{ subname, headerUrl, uploadedAt, fileSize, isUpdate }`
-- `DELETE /profile/{subname}/header` - Delete header image for a subname
+  - Response: `{ subname, network, headerUrl, uploadedAt, fileSize, isUpdate }`
+- `DELETE /profile/{network}/{subname}/header` - Delete header image for a subname
   - Auth: SIWE signature verification (no JWT required)
   - Body: `{ "siweMessage": string, "siweSignature": string, "address": string }`
-  - Response: `{ subname, message, deletedAt }`
+  - Response: `{ subname, network, message, deletedAt }`
+
+**Supported Networks:**
+
+- `mainnet` - Ethereum mainnet
+- `sepolia` - Ethereum Sepolia testnet
 
 ### Health Check
 
@@ -140,6 +145,8 @@ http://localhost:3000/api
 | `PORT`                       | Port to run the service on                 | No           | 3000                                                    |
 | `SIWE_ALLOWED_CHAIN_IDS`     | CSV of allowed chain IDs for SIWE          | No           | `1`                                                     |
 | `SIWE_NONCE_TTL_MS`          | Nonce TTL in ms for SIWE replay protection | No           | `300000`                                                |
+| `ETH_MAINNET_RPC_URL`        | Custom RPC URL for Ethereum mainnet        | No           | Uses Alchemy if `ALCHEMY_API_KEY` is set                |
+| `ETH_SEPOLIA_RPC_URL`        | Custom RPC URL for Ethereum Sepolia        | No           | Uses Alchemy if `ALCHEMY_API_KEY` is set                |
 | `STORAGE_MODE`               | `local` or `gcs`                           | No           | `gcs`                                                   |
 | `GCLOUD_PROJECT_ID`          | GCP project id (GCS mode)                  | Yes if `gcs` | -                                                       |
 | `GCLOUD_BUCKET_NAME`         | GCS bucket name (GCS mode)                 | Yes if `gcs` | `avatars.namespace.ninja`                               |
