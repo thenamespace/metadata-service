@@ -85,10 +85,27 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
         ? response.message.join('; ')
         : (response?.message ?? response?.error ?? 'Unexpected error');
 
-      const details: Record<string, unknown> = { ...response };
-      delete (details as { message?: unknown }).message;
-      delete (details as { statusCode?: unknown }).statusCode;
-      delete (details as { error?: unknown }).error;
+      // Safely extract details without circular references
+      const details: Record<string, unknown> = {};
+      try {
+        // Only copy safe, serializable properties
+        for (const [key, value] of Object.entries(response)) {
+          if (key !== 'message' && key !== 'statusCode' && key !== 'error') {
+            // Skip circular references and complex objects
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
+              details[key] = value;
+            } else if (Array.isArray(value)) {
+              // Only include arrays of primitives
+              if (value.every(item => typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean')) {
+                details[key] = value;
+              }
+            }
+          }
+        }
+      } catch {
+        // If there's any issue with serialization, just skip details
+        // This prevents circular reference errors
+      }
 
       return {
         status,

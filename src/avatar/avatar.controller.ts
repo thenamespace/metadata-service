@@ -17,6 +17,7 @@ import { Logger } from '@nestjs/common';
 import { FileType } from '../common/enums/file-type.enum';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 import { AvatarUploadResponseDto, DeleteResponseDto, HeaderUploadResponseDto } from './dto/avatar-responses.dto';
+import { AvatarDeleteDto, HeaderDeleteDto } from './dto/avatar-upload.dto';
 import { AvatarService, UploadResult } from './avatar.service';
 import { AuthService } from '../auth/auth.service';
 
@@ -92,9 +93,21 @@ export class AvatarController {
           format: 'binary',
           description: 'Image file (jpg, jpeg, png, gif, webp)',
         },
-        siweMessage: { type: 'string', description: 'SIWE message string' },
-        siweSignature: { type: 'string', description: 'Signature for SIWE message' },
-        address: { type: 'string', description: 'Wallet address (checks against SIWE)' },
+        siweMessage: { 
+          type: 'string', 
+          description: 'SIWE message string',
+          example: 'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z'
+        },
+        siweSignature: { 
+          type: 'string', 
+          description: 'Signature for SIWE message',
+          example: '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b'
+        },
+        address: { 
+          type: 'string', 
+          description: 'Wallet address (checks against SIWE)',
+          example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
+        },
       },
       required: ['avatar', 'siweMessage', 'siweSignature', 'address'],
     },
@@ -142,6 +155,7 @@ export class AvatarController {
   @DeleteRateLimit()
   @ApiOperation({ summary: 'Delete avatar for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
+  @ApiBody({ type: AvatarDeleteDto })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
     description: 'Avatar deleted',
@@ -156,16 +170,10 @@ export class AvatarController {
   })
   async delete(
     @Param('subname') subname: string,
-    @Req() req: unknown,
+    @Body() dto: AvatarDeleteDto,
   ) {
-    const r = req as LocalRequest;
-    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
-    const signature = this.getTextField(r.body?.siweSignature);
-    const address = this.getTextField(r.body?.address);
-    if (!message || !signature || !address) {
-      throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
-    }
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address });
+    const message = this.normalizeMessageNewlines(dto.siweMessage);
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature: dto.siweSignature, address: dto.address });
     await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
 
     const deleted = await this.avatarService.delete(subname, FileType.AVATAR);
@@ -195,9 +203,21 @@ export class AvatarController {
           format: 'binary',
           description: 'Header image file (jpg, jpeg, png, gif, webp)',
         },
-        siweMessage: { type: 'string', description: 'SIWE message string' },
-        siweSignature: { type: 'string', description: 'Signature for SIWE message' },
-        address: { type: 'string', description: 'Wallet address (checks against SIWE)' },
+        siweMessage: { 
+          type: 'string', 
+          description: 'SIWE message string',
+          example: 'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z'
+        },
+        siweSignature: { 
+          type: 'string', 
+          description: 'Signature for SIWE message',
+          example: '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b'
+        },
+        address: { 
+          type: 'string', 
+          description: 'Wallet address (checks against SIWE)',
+          example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
+        },
       },
       required: ['header', 'siweMessage', 'siweSignature', 'address'],
     },
@@ -245,6 +265,7 @@ export class AvatarController {
   @DeleteRateLimit()
   @ApiOperation({ summary: 'Delete header image for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
+  @ApiBody({ type: HeaderDeleteDto })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
     description: 'Header deleted',
@@ -259,16 +280,10 @@ export class AvatarController {
   })
   async deleteHeader(
     @Param('subname') subname: string,
-    @Req() req: unknown,
+    @Body() dto: HeaderDeleteDto,
   ) {
-    const r = req as LocalRequest;
-    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
-    const signature = this.getTextField(r.body?.siweSignature);
-    const address = this.getTextField(r.body?.address);
-    if (!message || !signature || !address) {
-      throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
-    }
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address });
+    const message = this.normalizeMessageNewlines(dto.siweMessage);
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature: dto.siweSignature, address: dto.address });
     await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress });
 
     const deleted = await this.avatarService.delete(subname, FileType.HEADER);
