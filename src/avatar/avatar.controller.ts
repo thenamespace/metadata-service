@@ -51,11 +51,11 @@ interface LocalRequest {
 }
 
 /**
- * Avatar controller for uploading, updating, deleting avatar and header images.
+ * Profile controller for uploading, updating, deleting avatar and header images.
  * Requires SIWE signature and ENS ownership for mutations.
  */
-@ApiTags('avatar')
-@Controller('avatar')
+@ApiTags('profile')
+@Controller('profile')
 export class AvatarController {
   private readonly logger = new Logger(AvatarController.name);
   constructor(
@@ -79,7 +79,7 @@ export class AvatarController {
     return message.replace(/\\n/g, '\n');
   }
 
-  @Post(':subname')
+  @Post(':subname/avatar')
   @UploadRateLimit()
   @ApiOperation({ summary: 'Upload or update avatar for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
@@ -151,7 +151,7 @@ export class AvatarController {
     };
   }
 
-  @Delete(':subname')
+  @Delete(':subname/avatar')
   @DeleteRateLimit()
   @ApiOperation({ summary: 'Delete avatar for a subname' })
   @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })

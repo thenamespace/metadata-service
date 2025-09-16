@@ -1,13 +1,13 @@
 # Metadata Service
 
-A standalone NestJS service for generating ENS subname metadata and images, and managing user-uploaded avatars/headers with authenticated endpoints. This service was extracted from the main indexer to provide dedicated metadata and media functionality.
+A standalone NestJS service for generating ENS subname metadata and images, and managing user-uploaded profile avatars/headers with SIWE-based authentication. This service was extracted from the main indexer to provide dedicated metadata and media functionality.
 
 ## Features
 
 - Generate JSON metadata for ENS subnames
 - Create dynamic PNG images with custom avatars
-- Upload/delete avatar and header images (JWT-protected)
-- SIWE-based auth to obtain JWT
+- Upload/delete profile avatar and header images (SIWE-protected)
+- Direct SIWE signature verification for each request
 - RESTful API with Swagger documentation
 - Docker support for easy deployment
 - Health check endpoints
@@ -46,8 +46,7 @@ METADATA_URL=http://localhost:3000
 INDEXER_SERVICE_URL=http://localhost:3001
 PORT=3000
 
-# Auth
-JWT_SECRET=change-me-in-prod
+# Auth (SIWE Configuration)
 SIWE_ALLOWED_CHAIN_IDS=1
 SIWE_NONCE_TTL_MS=300000
 
@@ -103,28 +102,29 @@ http://localhost:3000/api
 - `GET /metadata/network/{chainId}/token/{tokenId}` - Get JSON metadata for a subname
 - `GET /metadata/network/{chainId}/token/{tokenId}/image.png` - Get generated PNG image
 
-### Auth (SIWE -> JWT)
+### Auth (SIWE Nonce Generation)
 
 - `POST /auth/nonce` - Generate a nonce for the provided EVM address
-  - body: `{ "address": "0x..." }`
-- `POST /auth/verify` - Verify SIWE message and signature; returns JWT
-  - body: `{ "message": string, "signature": string, "address": "0x..." }`
+  - body: `{ "address": "0x...", "scope": "avatar+header" }`
+  - Returns: `{ "nonce": string, "expiresAt": number }`
 
-### Avatar
+### Profile
 
-- `POST /avatar/{subname}` - Upload or update avatar image for a subname
-  - Auth: `Authorization: Bearer <JWT>`
-  - Content-Type: `multipart/form-data` with field `avatar` (or `file`/`image`)
+- `POST /profile/{subname}/avatar` - Upload or update avatar image for a subname
+  - Auth: SIWE signature verification (no JWT required)
+  - Content-Type: `multipart/form-data` with fields: `avatar`, `siweMessage`, `siweSignature`, `address`
   - Response: `{ subname, avatarUrl, uploadedAt, fileSize, isUpdate }`
-- `DELETE /avatar/{subname}` - Delete avatar image for a subname
-  - Auth: `Authorization: Bearer <JWT>`
+- `DELETE /profile/{subname}/avatar` - Delete avatar image for a subname
+  - Auth: SIWE signature verification (no JWT required)
+  - Body: `{ "siweMessage": string, "siweSignature": string, "address": string }`
   - Response: `{ subname, message, deletedAt }`
-- `POST /avatar/{subname}/header` - Upload or update header image for a subname
-  - Auth: `Authorization: Bearer <JWT>`
-  - Content-Type: `multipart/form-data` with field `header` (or `file`/`image`)
+- `POST /profile/{subname}/header` - Upload or update header image for a subname
+  - Auth: SIWE signature verification (no JWT required)
+  - Content-Type: `multipart/form-data` with fields: `header`, `siweMessage`, `siweSignature`, `address`
   - Response: `{ subname, headerUrl, uploadedAt, fileSize, isUpdate }`
-- `DELETE /avatar/{subname}/header` - Delete header image for a subname
-  - Auth: `Authorization: Bearer <JWT>`
+- `DELETE /profile/{subname}/header` - Delete header image for a subname
+  - Auth: SIWE signature verification (no JWT required)
+  - Body: `{ "siweMessage": string, "siweSignature": string, "address": string }`
   - Response: `{ subname, message, deletedAt }`
 
 ### Health Check
@@ -138,7 +138,6 @@ http://localhost:3000/api
 | `METADATA_URL`               | Base URL for this service                  | Yes          | -                                                       |
 | `INDEXER_SERVICE_URL`        | URL of the indexer service                 | Yes          | -                                                       |
 | `PORT`                       | Port to run the service on                 | No           | 3000                                                    |
-| `JWT_SECRET`                 | Secret for signing/verifying JWT           | Yes (prod)   | `dev-secret`                                            |
 | `SIWE_ALLOWED_CHAIN_IDS`     | CSV of allowed chain IDs for SIWE          | No           | `1`                                                     |
 | `SIWE_NONCE_TTL_MS`          | Nonce TTL in ms for SIWE replay protection | No           | `300000`                                                |
 | `STORAGE_MODE`               | `local` or `gcs`                           | No           | `gcs`                                                   |
@@ -163,8 +162,8 @@ The service consists of several modules:
 
 - **MetadataModule**: Core metadata functionality
 - **SubnamesModule**: Client for fetching subname data from indexer
-- **AvatarModule**: Authenticated avatar/header upload and deletion
-- **AuthModule**: SIWE nonce/verify to issue JWTs
+- **AvatarModule**: Authenticated profile avatar/header upload and deletion
+- **AuthModule**: SIWE nonce generation and signature verification
 - **PropertiesModule**: Configuration management
 - **StorageModule**: Local or GCS-backed storage for media
 - **HealthModule**: Health check endpoints
@@ -175,8 +174,8 @@ The service consists of several modules:
 - **MetadataService**: Business logic for metadata generation
 - **ImageService**: Dynamic image generation with Canvas
 - **SubnamesClientService**: HTTP client for indexer service communication
-- **AvatarController**: Upload/delete avatar and header images for subnames
-- **AuthController/AuthService**: SIWE nonce issuance and signature verification, JWT issuing
+- **AvatarController**: Upload/delete profile avatar and header images for subnames
+- **AuthController/AuthService**: SIWE nonce issuance and signature verification
 - **StorageService**: Abstraction over local filesystem or GCS for media storage
 
 ## Image Generation
@@ -193,16 +192,18 @@ The service generates dynamic PNG images with:
 
 ### Runtime Dependencies
 
-- `@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express` - NestJS framework
+- `@nestjs/common`, `@nestjs/core`, `@nestjs/platform-fastify` - NestJS framework
 - `@nestjs/config` - Configuration management
 - `@nestjs/swagger` - API documentation
-- `@nestjs/jwt` and `passport-jwt` - JWT auth
 - `siwe` - Sign-In With Ethereum verification
 - `@nestjs/throttler` - Rate limiting
 - `canvas` - Image generation
 - `axios` - HTTP client
 - `@google-cloud/storage` - GCS backend (optional)
 - `viem` - Ethereum utilities
+- `sharp` - Image processing
+- `@fastify/multipart` - Multipart form handling
+- `@fastify/static` - Static file serving
 
 ### Development Dependencies
 
@@ -242,7 +243,6 @@ docker build -t metadata-service .
 docker run -p 3000:3000 \
   -e METADATA_URL=https://your-domain.com \
   -e INDEXER_SERVICE_URL=https://indexer.your-domain.com \
-  -e JWT_SECRET=change-me \
   -e STORAGE_MODE=gcs \
   -e GCLOUD_PROJECT_ID=your-project \
   -e GCLOUD_BUCKET_NAME=avatars.namespace.ninja \
@@ -259,7 +259,7 @@ docker run -p 3000:3000 \
 3. **Image Dependencies**: Canvas requires system libraries (handled in Dockerfile)
 4. **Caching**: Image generation results are cached in memory
 5. **Health Checks**: Use `/health` endpoint for load balancer health checks
-6. **Auth**: Protect avatar/header mutations with JWT from SIWE flow; rotate `JWT_SECRET`
+6. **Auth**: Protect profile avatar/header mutations with direct SIWE signature verification
 7. **Storage**: Use `gcs` in production; provide base64-encoded private key and scopes
 
 ## Migration from Indexer
@@ -269,7 +269,18 @@ This service was extracted from the main indexer project. Key changes:
 1. **Database Independence**: Uses HTTP client instead of direct database access
 2. **Simplified Configuration**: Only metadata and media-related environment variables
 3. **Standalone Deployment**: Can be deployed independently
-4. **API Compatibility**: Metadata endpoints remain compatible; new auth/avatar endpoints added
+4. **API Compatibility**: Metadata endpoints remain compatible; new SIWE-based auth/profile endpoints added
+
+## Authentication Flow
+
+The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow:
+
+1. **Nonce Generation**: Client requests a nonce for their Ethereum address via `POST /auth/nonce`
+2. **SIWE Message**: Client creates a SIWE message using the nonce and signs it with their wallet
+3. **Direct Verification**: For each protected operation, the client includes the SIWE message, signature, and address
+4. **ENS Ownership**: The service verifies the client owns the ENS subname they're trying to modify
+
+This approach eliminates the need for JWT tokens and provides a more direct, stateless authentication mechanism.
 
 ## Contributing
 
