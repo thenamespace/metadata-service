@@ -19,6 +19,7 @@ import { Logger } from '@nestjs/common';
 import { FileType } from '../common/enums/file-type.enum';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 import { AvatarUploadResponseDto, DeleteResponseDto, HeaderUploadResponseDto } from './dto/avatar-responses.dto';
+import { AvatarService, UploadResult } from './avatar.service';
 
 type MultipartBufferFile = {
   filename: string;
@@ -36,13 +37,6 @@ type MultipartStreamFile = {
   toBuffer?: () => Promise<Buffer>;
 };
 
-function isBufferFile(f: unknown): f is MultipartBufferFile {
-  return typeof f === 'object' && f !== null && 'data' in f;
-}
-
-function isStreamFile(f: unknown): f is MultipartStreamFile {
-  return typeof f === 'object' && f !== null && 'toBuffer' in f;
-}
 
 interface LocalRequest {
   user?: { address?: string };
@@ -66,6 +60,7 @@ export class AvatarController {
   constructor(
     private readonly storageService: StorageService,
     private readonly ensService: EnsService,
+    private readonly avatarService: AvatarService,
   ) {}
 
   @Post(':subname')
@@ -112,44 +107,13 @@ export class AvatarController {
     if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
 
-    const rawField = r.body?.avatar ?? r.body?.file ?? r.body?.image;
-    const fileField = Array.isArray(rawField) ? rawField[0] : rawField;
-    this.logger.log({ msg: 'File field check', hasFile: !!fileField });
-    if (!fileField) {
-      throw new BadRequestException({ code: ErrorCodes.MISSING_FILE, details: { field: 'avatar' } });
-    }
-
-    // Support both buffered and streamed multipart objects
-    let buffer: Buffer | undefined;
-    let mimetype: string | undefined;
-    if (isBufferFile(fileField)) {
-      buffer = fileField.data;
-      mimetype = fileField.mimetype;
-    } else if (isStreamFile(fileField)) {
-      buffer = await fileField.toBuffer!();
-      mimetype = fileField.mimetype;
-    }
-
-    if (!buffer || !mimetype) {
-      throw new BadRequestException({ code: ErrorCodes.MISSING_FILE, details: { field: 'avatar' } });
-    }
-
-    // Check if file already exists to determine if this is an update
-    const existingFile = await this.storageService.getFileBuffer(subname, FileType.AVATAR);
-    const isUpdate = !!existingFile;
-    
-    // Store original file unchanged
-    await this.storageService.save(subname, buffer, FileType.AVATAR, mimetype);
-
-    const timestamp = isUpdate ? Date.now().toString() : undefined;
-    const avatarUrl = this.storageService.getPublicUrl(subname, FileType.AVATAR, timestamp);
-    this.logger.log({ msg: 'Upload success', subname, avatarUrl, isUpdate });
+    const result: UploadResult = await this.avatarService.upload(subname, req, FileType.AVATAR);
     return {
       subname,
-      avatarUrl,
-      uploadedAt: new Date().toISOString(),
-      fileSize: buffer.length,
-      isUpdate,
+      avatarUrl: result.url,
+      uploadedAt: result.uploadedAt,
+      fileSize: result.fileSize,
+      isUpdate: result.isUpdate,
     };
   }
 
@@ -180,7 +144,7 @@ export class AvatarController {
     if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
 
-    const deleted = await this.storageService.delete(subname, FileType.AVATAR);
+    const deleted = await this.avatarService.delete(subname, FileType.AVATAR);
     this.logger.log({ msg: 'Delete result', subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
@@ -237,44 +201,13 @@ export class AvatarController {
     if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
 
-    const rawField = r.body?.header ?? r.body?.file ?? r.body?.image;
-    const fileField = Array.isArray(rawField) ? rawField[0] : rawField;
-    this.logger.log({ msg: 'File field check', hasFile: !!fileField });
-    if (!fileField) {
-      throw new BadRequestException({ code: ErrorCodes.MISSING_FILE, details: { field: 'header' } });
-    }
-
-    // Support both buffered and streamed multipart objects
-    let buffer: Buffer | undefined;
-    let mimetype: string | undefined;
-    if (isBufferFile(fileField)) {
-      buffer = fileField.data;
-      mimetype = fileField.mimetype;
-    } else if (isStreamFile(fileField)) {
-      buffer = await fileField.toBuffer!();
-      mimetype = fileField.mimetype;
-    }
-
-    if (!buffer || !mimetype) {
-      throw new BadRequestException({ code: ErrorCodes.MISSING_FILE, details: { field: 'header' } });
-    }
-
-    // Check if file already exists to determine if this is an update
-    const existingFile = await this.storageService.getFileBuffer(subname, FileType.HEADER);
-    const isUpdate = !!existingFile;
-    
-    // Store original file unchanged
-    await this.storageService.save(subname, buffer, FileType.HEADER, mimetype);
-
-    const timestamp = isUpdate ? Date.now().toString() : undefined;
-    const headerUrl = this.storageService.getPublicUrl(subname, FileType.HEADER, timestamp);
-    this.logger.log({ msg: 'Header upload success', subname, headerUrl, isUpdate });
+    const result: UploadResult = await this.avatarService.upload(subname, req, FileType.HEADER);
     return {
       subname,
-      headerUrl,
-      uploadedAt: new Date().toISOString(),
-      fileSize: buffer.length,
-      isUpdate,
+      headerUrl: result.url,
+      uploadedAt: result.uploadedAt,
+      fileSize: result.fileSize,
+      isUpdate: result.isUpdate,
     };
   }
 
@@ -305,7 +238,7 @@ export class AvatarController {
     if (!userAddress) throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     await this.ensService.assertOwnerOrThrow({ subname, address: userAddress });
 
-    const deleted = await this.storageService.delete(subname, FileType.HEADER);
+    const deleted = await this.avatarService.delete(subname, FileType.HEADER);
     this.logger.log({ msg: 'Header delete result', subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
