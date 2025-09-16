@@ -50,7 +50,6 @@ async function bootstrap() {
     .setTitle('Metadata Service API')
     .setDescription('API for generating ENS subname metadata and images')
     .setVersion('1.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearer')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

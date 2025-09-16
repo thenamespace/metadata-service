@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { JwtModule } from '@nestjs/jwt';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MetadataModule } from './metadata/metadata.module';
@@ -16,7 +15,6 @@ import { AvatarModule } from './avatar/avatar.module';
     }),
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     ThrottlerModule.forRoot([{ ttl: 60, limit: 100 }]),
-    JwtModule.register({}),
     MetadataModule,
     AuthModule,
     AvatarModule,
