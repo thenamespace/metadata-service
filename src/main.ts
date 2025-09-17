@@ -8,8 +8,6 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import multipart from '@fastify/multipart';
-import fastifyStatic from '@fastify/static';
-import path from 'node:path';
 import { GlobalHttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
@@ -26,15 +24,9 @@ async function bootstrap() {
       fileSize: 5 * 1024 * 1024,
       files: 1,
     },
-  });
+  } as any);
 
-  if ((configService.get<string>('STORAGE_MODE') || '').toLowerCase() === 'local') {
-    await app.register(fastifyStatic as unknown as any, {
-      root: path.resolve(process.cwd(), 'public'),
-      prefix: '/static/',
-      decorateReply: false,
-    });
-  }
+  // Static local serving removed; GCS is always used
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -1,9 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Injectable, Logger } from '@nestjs/common';
 import { Storage } from '@google-cloud/storage';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { FileType, StorageMode } from '../common/enums/file-type.enum';
+import { FileType } from '../common/enums/file-type.enum';
 import { ConfigService } from '@nestjs/config';
 import { Network, getNetworkPath } from '../common/enums/network.enum';
 
@@ -22,23 +20,17 @@ type GoogleStorageLike = {
 
 /**
  * Storage service for saving, reading, and deleting avatar and header files.
- * Supports local filesystem and Google Cloud Storage modes.
+ * Supports Google Cloud Storage.
  */
 @Injectable()
 export class StorageService {
   private storage: GoogleStorageLike | null = null;
   private bucketName: string;
-  private mode: StorageMode;
   private readonly logger = new Logger(StorageService.name);
 
   constructor(private readonly configService: ConfigService) {
     this.bucketName = this.configService.get<string>('GCLOUD_BUCKET_NAME') || 'avatars.namespace.ninja';
-    const storageMode = this.configService.get<string>('STORAGE_MODE');
-    this.mode = storageMode === StorageMode.LOCAL ? StorageMode.LOCAL : StorageMode.GCS;
-    
-    if (this.mode === StorageMode.GCS) {
-      this.initializeGCS();
-    }
+    this.initializeGCS();
   }
 
   private initializeGCS(): void {
@@ -78,9 +70,7 @@ export class StorageService {
   getPublicUrl(subname: string, network: Network, type: FileType = FileType.AVATAR, timestamp?: string): string {
     const networkPath = getNetworkPath(network);
     const basePath = `${networkPath}subname/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`;
-    const baseUrl = this.mode === StorageMode.LOCAL
-      ? `/static/${networkPath}subname/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`
-      : `https://${this.bucketName}/${basePath}`;
+    const baseUrl = `https://${this.bucketName}/${basePath}`;
     return timestamp ? `${baseUrl}?timestamp=${timestamp}` : baseUrl;
   }
 
@@ -92,13 +82,6 @@ export class StorageService {
     const networkPath = getNetworkPath(network);
     const filePath = `${networkPath}subname/${subname}/${fileName}`;
     
-    if (this.mode === StorageMode.LOCAL) {
-      const root = path.resolve(process.cwd(), 'public', networkPath, 'subname', subname);
-      await fs.mkdir(root, { recursive: true });
-      await fs.writeFile(path.join(root, fileName), buffer);
-      return;
-    }
-
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
     }
@@ -121,16 +104,6 @@ export class StorageService {
     const networkPath = getNetworkPath(network);
     const filePath = `${networkPath}subname/${subname}/${fileName}`;
     
-    if (this.mode === StorageMode.LOCAL) {
-      const p = path.resolve(process.cwd(), 'public', networkPath, 'subname', subname, fileName);
-      try {
-        await fs.rm(p, { force: true });
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
     }
@@ -150,19 +123,6 @@ export class StorageService {
     const networkPath = getNetworkPath(network);
     const filePath = `${networkPath}subname/${subname}/${fileName}`;
     
-    if (this.mode === StorageMode.LOCAL) {
-      const p = path.resolve(process.cwd(), 'public', networkPath, 'subname', subname, fileName);
-      try {
-        const buffer = await fs.readFile(p);
-        // Try to detect content type from file extension or use default
-        const contentType = this.detectContentType(buffer);
-        return { buffer, contentType };
-      } catch (error) {
-        this.logger.warn(`Local file not found: ${p}, error: ${error}`);
-        return null;
-      }
-    }
-
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
     }
