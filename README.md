@@ -1,4 +1,4 @@
-# Metadata Service
+# Metadata Service  
 
 A standalone NestJS service for generating ENS subname metadata and images, and managing user-uploaded profile avatars/headers with SIWE-based authentication. This service was extracted from the main indexer to provide dedicated metadata and media functionality.
 
