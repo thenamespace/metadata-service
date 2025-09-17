@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SiweMessage } from 'siwe';
 import { generateSiweNonce } from 'viem/siwe';
 import { isAddress } from 'viem';
@@ -18,7 +19,7 @@ type NonceRecord = {
 export class AuthService {
   private addressToNonce: Map<string, NonceRecord> = new Map();
 
-  constructor() {}
+  constructor(private readonly configService: ConfigService) {}
 
   generateNonce(address: string, scope?: Scope): { nonce: string; expiresAt: number } {
     if (!isAddress(address)) {
@@ -26,7 +27,7 @@ export class AuthService {
     }
     const nonce = generateSiweNonce();
     const issuedAt = Date.now();
-    const ttlMs = Number(process.env.SIWE_NONCE_TTL_MS || 5 * 60 * 1000);
+    const ttlMs = Number(this.configService.get<number>('SIWE_NONCE_TTL_MS') || 5 * 60 * 1000);
     const expiresAt = issuedAt + ttlMs;
     const effectiveScope: Scope = scope ?? 'avatar+header';
     this.addressToNonce.set(address.toLowerCase(), {
@@ -87,7 +88,7 @@ export class AuthService {
       }
 
       // Restrict allowed chains if configured
-      const allowedChainIds = (process.env.SIWE_ALLOWED_CHAIN_IDS || '1')
+      const allowedChainIds = (this.configService.get<string>('SIWE_ALLOWED_CHAIN_IDS') || '1')
         .split(',')
         .map((v) => v.trim())
         .filter(Boolean)
