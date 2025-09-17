@@ -50,11 +50,7 @@ PORT=3000
 SIWE_ALLOWED_CHAIN_IDS=1
 SIWE_NONCE_TTL_MS=300000
 
-# Storage (choose one mode)
-# STORAGE_MODE can be 'local' or 'gcs' (default: gcs)
-STORAGE_MODE=
-
-# GCS settings (required if STORAGE_MODE=gcs)
+# GCS settings
 GCLOUD_PROJECT_ID=
 GCLOUD_BUCKET_NAME=avatars.namespace.ninja
 GCLOUD_BUCKET_CLIENT_EMAIL=
@@ -75,8 +71,6 @@ pnpm run start:dev
 pnpm run start:prod
 ```
 
-When `STORAGE_MODE=local`, uploaded files are saved under `public/<subname>/avatar` and `public/<subname>/header`, and are served from `/static/...` URLs by the service.
-
 ### Running with Docker
 
 ```bash
@@ -92,7 +86,13 @@ docker-compose --profile with-indexer up --build
 Once the service is running, you can access the Swagger documentation at:
 
 ```
-http://localhost:3000/api
+http://localhost:3000/docs
+```
+
+OpenAPI JSON is available at:
+
+```
+http://localhost:3000/openapi.json
 ```
 
 ## API Endpoints
@@ -138,21 +138,20 @@ http://localhost:3000/api
 
 ## Environment Variables
 
-| Variable                     | Description                                | Required     | Default                                                 |
-| ---------------------------- | ------------------------------------------ | ------------ | ------------------------------------------------------- |
-| `METADATA_URL`               | Base URL for this service                  | Yes          | -                                                       |
-| `INDEXER_SERVICE_URL`        | URL of the indexer service                 | Yes          | -                                                       |
-| `PORT`                       | Port to run the service on                 | No           | 3000                                                    |
-| `SIWE_ALLOWED_CHAIN_IDS`     | CSV of allowed chain IDs for SIWE          | No           | `1`                                                     |
-| `SIWE_NONCE_TTL_MS`          | Nonce TTL in ms for SIWE replay protection | No           | `300000`                                                |
-| `ETH_MAINNET_RPC_URL`        | Custom RPC URL for Ethereum mainnet        | No           | Uses Alchemy if `ALCHEMY_API_KEY` is set                |
-| `ETH_SEPOLIA_RPC_URL`        | Custom RPC URL for Ethereum Sepolia        | No           | Uses Alchemy if `ALCHEMY_API_KEY` is set                |
-| `STORAGE_MODE`               | `local` or `gcs`                           | No           | `gcs`                                                   |
-| `GCLOUD_PROJECT_ID`          | GCP project id (GCS mode)                  | Yes if `gcs` | -                                                       |
-| `GCLOUD_BUCKET_NAME`         | GCS bucket name (GCS mode)                 | Yes if `gcs` | `avatars.namespace.ninja`                               |
-| `GCLOUD_BUCKET_CLIENT_EMAIL` | Service account email (GCS mode)           | Yes if `gcs` | -                                                       |
-| `GCLOUD_BUCKET_PRIVATE_KEY`  | Base64-encoded private key (GCS mode)      | Yes if `gcs` | -                                                       |
-| `GCLOUD_SCOPES`              | OAuth scopes (GCS mode)                    | Yes if `gcs` | `https://www.googleapis.com/auth/devstorage.read_write` |
+| Variable                     | Description                                | Required | Default                                                 |
+| ---------------------------- | ------------------------------------------ | -------- | ------------------------------------------------------- |
+| `METADATA_URL`               | Base URL for this service                  | Yes      | -                                                       |
+| `INDEXER_SERVICE_URL`        | URL of the indexer service                 | Yes      | -                                                       |
+| `PORT`                       | Port to run the service on                 | No       | 3000                                                    |
+| `SIWE_ALLOWED_CHAIN_IDS`     | CSV of allowed chain IDs for SIWE          | No       | `1`                                                     |
+| `SIWE_NONCE_TTL_MS`          | Nonce TTL in ms for SIWE replay protection | No       | `300000`                                                |
+| `ETH_MAINNET_RPC_URL`        | Custom RPC URL for Ethereum mainnet        | No       | Uses Alchemy if `ALCHEMY_API_KEY` is set                |
+| `ETH_SEPOLIA_RPC_URL`        | Custom RPC URL for Ethereum Sepolia        | No       | Uses Alchemy if `ALCHEMY_API_KEY` is set                |
+| `GCLOUD_PROJECT_ID`          | GCP project id                             | Yes      | -                                                       |
+| `GCLOUD_BUCKET_NAME`         | GCS bucket name                            | Yes      | `avatars.namespace.ninja`                               |
+| `GCLOUD_BUCKET_CLIENT_EMAIL` | Service account email                      | Yes      | -                                                       |
+| `GCLOUD_BUCKET_PRIVATE_KEY`  | Base64-encoded private key                 | Yes      | -                                                       |
+| `GCLOUD_SCOPES`              | OAuth scopes                               | Yes      | `https://www.googleapis.com/auth/devstorage.read_write` |
 
 ## Rate Limiting
 
@@ -172,7 +171,7 @@ The service consists of several modules:
 - **AvatarModule**: Authenticated profile avatar/header upload and deletion
 - **AuthModule**: SIWE nonce generation and signature verification
 - **PropertiesModule**: Configuration management
-- **StorageModule**: Local or GCS-backed storage for media
+- **StorageModule**: GCS-backed storage for media
 - **HealthModule**: Health check endpoints
 
 ### Key Components
@@ -183,7 +182,7 @@ The service consists of several modules:
 - **SubnamesClientService**: HTTP client for indexer service communication
 - **AvatarController**: Upload/delete profile avatar and header images for subnames
 - **AuthController/AuthService**: SIWE nonce issuance and signature verification
-- **StorageService**: Abstraction over local filesystem or GCS for media storage
+- **StorageService**: Abstraction over GCS for media storage
 
 ## Image Generation
 
@@ -206,7 +205,7 @@ The service generates dynamic PNG images with:
 - `@nestjs/throttler` - Rate limiting
 - `canvas` - Image generation
 - `axios` - HTTP client
-- `@google-cloud/storage` - GCS backend (optional)
+- `@google-cloud/storage` - GCS backend
 - `viem` - Ethereum utilities
 - `sharp` - Image processing
 - `@fastify/multipart` - Multipart form handling

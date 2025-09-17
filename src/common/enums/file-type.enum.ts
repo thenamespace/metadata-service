@@ -3,11 +3,6 @@ export enum FileType {
   HEADER = 'header',
 }
 
-export enum StorageMode {
-  LOCAL = 'local',
-  GCS = 'gcs',
-}
-
 export enum ImageFormat {
   WEBP = 'image/webp',
   JPEG = 'image/jpeg',

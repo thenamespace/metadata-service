@@ -1,15 +1,13 @@
-import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import multipart from '@fastify/multipart';
-import fastifyStatic from '@fastify/static';
-import path from 'node:path';
 import { GlobalHttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
@@ -18,21 +16,17 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
 
+  const configService = app.get(ConfigService);
+
   await app.register(multipart as unknown as any, {
     attachFieldsToBody: true,
     limits: {
       fileSize: 5 * 1024 * 1024,
       files: 1,
     },
-  });
+  } as any);
 
-  if (process.env.STORAGE_MODE === 'local') {
-    await app.register(fastifyStatic as unknown as any, {
-      root: path.resolve(process.cwd(), 'public'),
-      prefix: '/static/',
-      decorateReply: false,
-    });
-  }
+  // Static local serving removed; GCS is always used
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -61,7 +55,7 @@ async function bootstrap() {
     res.send(document);
   });
 
-  const port = Number(process.env.PORT ?? 3000);
+  const port = Number(configService.get<number>('PORT') ?? 3000);
   await app.listen(port, '0.0.0.0');
 }
 void bootstrap();

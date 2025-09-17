@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { FileType, SupportedMimeTypes } from '../common/enums/file-type.enum';
 import { StorageService } from '../storage/storage.service';
+import { ConfigService } from '@nestjs/config';
 import { Network } from '../common/enums/network.enum';
 
 type MultipartBufferFile = {
@@ -50,10 +51,13 @@ export class AvatarService {
   private readonly logger = new Logger(AvatarService.name);
 
   // Defaults can be overridden by env vars
-  private readonly maxAvatarBytes = Number(process.env.MAX_AVATAR_BYTES_IN_MB || 2 * 1024 * 1024); // 2MB
-  private readonly maxHeaderBytes = Number(process.env.MAX_HEADER_BYTES_IN_MB || 5 * 1024 * 1024); // 5MB
+  private readonly maxAvatarBytes: number;
+  private readonly maxHeaderBytes: number;
 
-  constructor(private readonly storageService: StorageService) {}
+  constructor(private readonly storageService: StorageService, private readonly configService: ConfigService) {
+    this.maxAvatarBytes = Number(this.configService.get<number>('MAX_AVATAR_BYTES_IN_MB') || 2 * 1024 * 1024);
+    this.maxHeaderBytes = Number(this.configService.get<number>('MAX_HEADER_BYTES_IN_MB') || 5 * 1024 * 1024);
+  }
 
   async upload(subname: string, network: Network, req: unknown, type: FileType): Promise<UploadResult> {
     const { buffer, mimetype } = await this.extractFileFromRequest(req, type);
