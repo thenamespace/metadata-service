@@ -77,7 +77,8 @@ export class AvatarController {
 
   private normalizeMessageNewlines(message: string): string {
     // Allow users to pass messages with literal \n sequences via curl/Swagger
-    return message.replace(/\\n/g, '\n');
+    // Also normalize \r\n sequences to proper line breaks
+    return message.replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
   }
 
   @Post(':network/:subname/avatar')
@@ -129,7 +130,7 @@ export class AvatarController {
   })
   @HttpCode(HttpStatus.OK)
   async upload(
-    @Param('network') network: string,
+    @Param('network') network: Network,
     @Param('subname') subname: string,
     @Req() req: unknown,
   ) {
@@ -139,6 +140,8 @@ export class AvatarController {
 
     const r = req as LocalRequest;
     this.logger.log({ msg: 'Upload hit', network, subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
+    this.logger.log({ msg: 'siwe', body: r.body?.siweMessage });
+
     const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);
@@ -146,9 +149,9 @@ export class AvatarController {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
-    const result: UploadResult = await this.avatarService.upload(subname, network as Network, req, FileType.AVATAR);
+    const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.AVATAR);
     return {
       subname,
       network,
@@ -178,7 +181,7 @@ export class AvatarController {
     },
   })
   async delete(
-    @Param('network') network: string,
+    @Param('network') network: Network,
     @Param('subname') subname: string,
     @Body() dto: AvatarDeleteDto,
   ) {
@@ -188,9 +191,9 @@ export class AvatarController {
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature: dto.siweSignature, address: dto.address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
-    const deleted = await this.avatarService.delete(subname, network as Network, FileType.AVATAR);
+    const deleted = await this.avatarService.delete(subname, network, FileType.AVATAR);
     this.logger.log({ msg: 'Delete result', network, subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
@@ -253,7 +256,7 @@ export class AvatarController {
   })
   @HttpCode(HttpStatus.OK)
   async uploadHeader(
-    @Param('network') network: string,
+    @Param('network') network: Network,
     @Param('subname') subname: string,
     @Req() req: unknown,
   ) {
@@ -270,9 +273,9 @@ export class AvatarController {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
-    const result: UploadResult = await this.avatarService.upload(subname, network as Network, req, FileType.HEADER);
+    const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.HEADER);
     return {
       subname,
       network,
@@ -302,7 +305,7 @@ export class AvatarController {
     },
   })
   async deleteHeader(
-    @Param('network') network: string,
+    @Param('network') network: Network,
     @Param('subname') subname: string,
     @Body() dto: HeaderDeleteDto,
   ) {
@@ -312,9 +315,9 @@ export class AvatarController {
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature: dto.siweSignature, address: dto.address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network as Network });
+      await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
-    const deleted = await this.avatarService.delete(subname, network as Network, FileType.HEADER);
+    const deleted = await this.avatarService.delete(subname, network, FileType.HEADER);
     this.logger.log({ msg: 'Header delete result', network, subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
