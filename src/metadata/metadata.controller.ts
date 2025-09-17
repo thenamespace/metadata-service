@@ -1,6 +1,7 @@
-import { Controller, Get, Param, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Param, Res, Response } from '@nestjs/common';
 import { MetadataService } from './metadata.service';
 import { ApiOperation, ApiParam } from '@nestjs/swagger';
+import { Response as ExpressResponse } from 'express';
 
 @Controller('/metadata')
 export class MetadataController {
@@ -27,13 +28,13 @@ export class MetadataController {
   @ApiParam({ name: 'tokenId', description: 'The token ID to query' })
   public async getDefaultAvatar(
     @Param() params: { chainId: string; tokenId: string },
-  ): Promise<StreamableFile> {
+    @Res() res: ExpressResponse,
+  ) {
     const buffer = await this.metadataService.getMetadataImage(
       params.tokenId,
       params.chainId,
     );
-    return new StreamableFile(buffer, {
-      type: 'image/png',
-    });
+    res.setHeader('Content-Type', 'image/png');
+    res.send(buffer);
   }
 }
