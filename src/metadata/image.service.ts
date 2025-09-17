@@ -1,8 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  createCanvas,
+  CanvasGradient,
+  loadImage,
+  CanvasRenderingContext2D,
+  registerFont
+} from 'canvas';
 import * as path from 'path';
-type CanvasRenderingContext2D = any;
-type CanvasGradient = any;
 
 const IMAGE_SIZE = 1000;
 const MAX_LABEL_LEN = 18;
@@ -25,22 +29,8 @@ const customLogos: Record<string, string> = {
   "rarepizzas": pizzadaoLogo,
 }
 
-let canvasLib: any | null = null;
-let canvasInitialized = false;
-
-function ensureCanvasLoaded(): any | null {
-  if (canvasInitialized && canvasLib) return canvasLib;
-  try {
-    const mod = require('canvas');
-    const fontPath = path.resolve(__dirname, '../assets/fonts', 'Satoshi-Bold.otf');
-    mod.registerFont(fontPath, { family: 'Satoshi' });
-    canvasLib = mod;
-    canvasInitialized = true;
-    return mod;
-  } catch {
-    return null;
-  }
-}
+const FONT_PATH = path.resolve(__dirname, '../assets/fonts', 'Satoshi-Bold.otf');
+registerFont(FONT_PATH, { family: 'Satoshi' });
 
 interface ImageCache {
   generated: number;
@@ -72,11 +62,6 @@ export class ImageService {
   };
 
   private generateImage = async (fullName: string, bgImage?: string) => {
-    const mod = ensureCanvasLoaded();
-    if (!mod) {
-      return this.generateSvgFallback(fullName);
-    }
-    const { createCanvas } = mod;
     const canvas = createCanvas(IMAGE_SIZE, IMAGE_SIZE);
     const ctx = canvas.getContext('2d');
     this.createGradiantBg(ctx);
@@ -123,9 +108,6 @@ export class ImageService {
   };
 
   private attachLogoToImage = async (ctx: CanvasRenderingContext2D) => {
-    const mod = ensureCanvasLoaded();
-    if (!mod) return;
-    const { loadImage } = mod;
     const ninjaLogoImg = await loadImage(namespaceLogo);
     ctx.drawImage(ninjaLogoImg, 100, 100, 150, 150);
   };
@@ -141,9 +123,6 @@ export class ImageService {
     if (customLogos[parentName]) {
 
         try {
-          const mod = ensureCanvasLoaded();
-          if (!mod) return;
-          const { loadImage } = mod;
           const customLogoUrl = customLogos[parentName];
           const customLogo = await loadImage(customLogoUrl);
           ctx.drawImage(customLogo, 700, 100, 150, 150);
@@ -159,32 +138,12 @@ export class ImageService {
   ) => {
 
     try {
-      const mod = ensureCanvasLoaded();
-      if (!mod) return;
-      const { loadImage } = mod;
       const img = await loadImage(bgImage);
       ctx.drawImage(img, 0, 0, IMAGE_SIZE, IMAGE_SIZE);
     } catch (err) {
       Logger.error("Failed to apply avatar to bg", err);
     }
   };
-
-  private generateSvgFallback(fullName: string): Buffer {
-    const safe = fullName.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${IMAGE_SIZE}" height="${IMAGE_SIZE}">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#7990f7" />
-      <stop offset="100%" stop-color="#44bcf0" />
-    </linearGradient>
-  </defs>
-  <rect width="100%" height="100%" fill="url(#g)" />
-  <text x="100" y="900" font-size="105" font-family="Arial, Helvetica, sans-serif" fill="#ffffff">${safe}</text>
-  <title>Generated without native canvas bindings</title>
-</svg>`;
-    return Buffer.from(svg, 'utf8');
-  }
 
   private createGradiantBg = (ctx: CanvasRenderingContext2D) => {
     const gradient: CanvasGradient = this.defaultGradiant(ctx);
