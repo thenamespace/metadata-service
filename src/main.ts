@@ -24,10 +24,14 @@ async function bootstrap() {
       cb(null, true);
     },
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    // Respond permissively to preflight; echo headers via catch-all below if needed
+    allowedHeaders: ['*'],
     exposedHeaders: ['Content-Type'],
     credentials: false,
     maxAge: 86400,
+    // Ensure preflights are handled even if route is not defined strictly
+    preflight: true,
+    strictPreflight: false,
   } as any);
 
   await app.register(multipart as unknown as any, {
