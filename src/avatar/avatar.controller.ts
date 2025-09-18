@@ -139,9 +139,6 @@ export class AvatarController {
     }
 
     const r = req as LocalRequest;
-    this.logger.log({ msg: 'Upload hit', network, subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
-    this.logger.log({ msg: 'siwe', body: r.body?.siweMessage });
-
     const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);

@@ -7,6 +7,7 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
+import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { GlobalHttpExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -17,6 +18,17 @@ async function bootstrap() {
   );
 
   const configService = app.get(ConfigService);
+
+  await app.register(cors as unknown as any, {
+    origin: (origin: string, cb: (err: Error | null, allow: boolean) => void) => {
+      cb(null, true);
+    },
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Type'],
+    credentials: false,
+    maxAge: 86400,
+  } as any);
 
   await app.register(multipart as unknown as any, {
     attachFieldsToBody: true,
