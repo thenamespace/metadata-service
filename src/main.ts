@@ -20,18 +20,9 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   await app.register(cors as unknown as any, {
-    origin: (origin: string, cb: (err: Error | null, allow: boolean) => void) => {
-      cb(null, true);
-    },
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    // Respond permissively to preflight; echo headers via catch-all below if needed
-    allowedHeaders: ['*'],
-    exposedHeaders: ['Content-Type'],
-    credentials: false,
-    maxAge: 86400,
-    // Ensure preflights are handled even if route is not defined strictly
-    preflight: true,
-    strictPreflight: false,
+    origin: '*',
+    methods: ['POST', 'GET', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: '*',
   } as any);
 
   await app.register(multipart as unknown as any, {
