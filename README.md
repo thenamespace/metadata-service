@@ -1,4 +1,4 @@
-# Metadata Service  
+# Metadata Service
 
 A standalone NestJS service for generating ENS subname metadata and images, and managing user-uploaded profile avatars/headers with SIWE-based authentication. This service was extracted from the main indexer to provide dedicated metadata and media functionality.
 
@@ -7,7 +7,10 @@ A standalone NestJS service for generating ENS subname metadata and images, and 
 - Generate JSON metadata for ENS subnames
 - Create dynamic PNG images with custom avatars
 - Upload/delete profile avatar and header images (SIWE-protected)
-- Direct SIWE signature verification for each request
+- Direct SIWE signature verification for each request, including:
+  - EOA signatures
+  - Smart contract wallet signatures (ERC-4337 / EIP-1271)
+  - Pre-deploy smart account signatures via ERC-6492 using `@ambire/signature-validator`
 - RESTful API with Swagger documentation
 - Docker support for easy deployment
 - Health check endpoints
@@ -132,6 +135,8 @@ http://localhost:3000/openapi.json
 - `mainnet` - Ethereum mainnet
 - `sepolia` - Ethereum Sepolia testnet
 
+SIWE is supported on chain ids `1` (Mainnet) and `11155111` (Sepolia).
+
 ### Health Check
 
 - `GET /health` - Service health status
@@ -210,6 +215,7 @@ The service generates dynamic PNG images with:
 - `sharp` - Image processing
 - `@fastify/multipart` - Multipart form handling
 - `@fastify/static` - Static file serving
+- `@ambire/signature-validator` - ERC-6492 and smart wallet signature validation
 
 ### Development Dependencies
 
@@ -228,6 +234,16 @@ pnpm run test:e2e
 
 # Test coverage
 pnpm run test:cov
+```
+
+### Test locally with Docker
+
+```bash
+docker build -t metadata-service:local .
+docker run --rm --name metadata-service \
+  -p 3001:3001 \
+  --env-file .env  \
+  metadata-service:local
 ```
 
 ## Building
@@ -279,7 +295,7 @@ This service was extracted from the main indexer project. Key changes:
 
 ## Authentication Flow
 
-The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow:
+The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow with full support for both EOA (Externally Owned Accounts) and smart contract wallets (ERC-4337/EIP-1271). It also supports ERC-6492 for validating signatures from smart accounts that are not yet deployed:
 
 1. **Nonce Generation**: Client requests a nonce for their Ethereum address via `POST /auth/nonce`
 2. **SIWE Message**: Client creates a SIWE message using the nonce and signs it with their wallet
@@ -287,6 +303,13 @@ The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow:
 4. **ENS Ownership**: The service verifies the client owns the ENS subname they're trying to modify
 
 This approach eliminates the need for JWT tokens and provides a more direct, stateless authentication mechanism.
+
+### Wallet Type Support
+
+- **EOA Wallets** (MetaMask, Rainbow, etc.): Standard ECDSA signature verification using `ecrecover`
+- **Smart Contract Wallets** (ERC-4337 accounts, Safe, etc.)
+
+The service automatically detects the wallet type and uses the appropriate verification method. Smart contract wallet signatures can be variable length and contain additional metadata, which is fully supported. For smart accounts that are not yet deployed, ERC-6492 signatures are validated using `@ambire/signature-validator`.
 
 ## Contributing
 
