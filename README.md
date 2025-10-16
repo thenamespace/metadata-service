@@ -1,4 +1,4 @@
-# Metadata Service  
+# Metadata Service
 
 A standalone NestJS service for generating ENS subname metadata and images, and managing user-uploaded profile avatars/headers with SIWE-based authentication. This service was extracted from the main indexer to provide dedicated metadata and media functionality.
 
@@ -279,7 +279,7 @@ This service was extracted from the main indexer project. Key changes:
 
 ## Authentication Flow
 
-The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow:
+The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow with full support for both EOA (Externally Owned Accounts) and smart contract wallets (ERC-4337/EIP-1271):
 
 1. **Nonce Generation**: Client requests a nonce for their Ethereum address via `POST /auth/nonce`
 2. **SIWE Message**: Client creates a SIWE message using the nonce and signs it with their wallet
@@ -287,6 +287,13 @@ The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow:
 4. **ENS Ownership**: The service verifies the client owns the ENS subname they're trying to modify
 
 This approach eliminates the need for JWT tokens and provides a more direct, stateless authentication mechanism.
+
+### Wallet Type Support
+
+- **EOA Wallets** (MetaMask, Rainbow, etc.): Standard ECDSA signature verification using `ecrecover`
+- **Smart Contract Wallets** (ERC-4337 accounts, Safe, etc.)
+
+The service automatically detects the wallet type and uses the appropriate verification method. Smart contract wallet signatures can be variable length and contain additional metadata, which is fully supported.
 
 ## Contributing
 

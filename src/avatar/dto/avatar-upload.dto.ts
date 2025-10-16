@@ -16,7 +16,9 @@ export class AvatarUploadDto {
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[a-fA-F0-9]{130}$/, { message: 'Invalid signature format' })
+  @Matches(/^0x[a-fA-F0-9]{130,}$/, { 
+    message: 'Invalid signature format - must be at least 130 hex characters (65 bytes) for EOA signatures, or longer for smart contract signatures' 
+  })
   siweSignature!: string;
 
   @ApiProperty({
