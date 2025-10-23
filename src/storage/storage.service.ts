@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Injectable, Logger } from '@nestjs/common';
 import { Storage } from '@google-cloud/storage';
 import { FileType } from '../common/enums/file-type.enum';
@@ -69,7 +68,7 @@ export class StorageService {
    */
   getPublicUrl(subname: string, network: Network, type: FileType = FileType.AVATAR, timestamp?: string): string {
     const networkPath = getNetworkPath(network);
-    const basePath = `${networkPath}subname/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`;
+    const basePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     const baseUrl = `https://${this.bucketName}/${basePath}`;
     return timestamp ? `${baseUrl}?timestamp=${timestamp}` : baseUrl;
   }
@@ -78,9 +77,8 @@ export class StorageService {
    * Save a file to the configured storage backend with content type metadata.
    */
   async save(subname: string, network: Network, buffer: Buffer, type: FileType = FileType.AVATAR, contentType: string): Promise<void> {
-    const fileName = type === FileType.HEADER ? 'header' : 'avatar';
     const networkPath = getNetworkPath(network);
-    const filePath = `${networkPath}subname/${subname}/${fileName}`;
+    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
@@ -100,9 +98,8 @@ export class StorageService {
    * Delete a stored file; returns true if deleted or existed, false if missing.
    */
   async delete(subname: string, network: Network, type: FileType = FileType.AVATAR): Promise<boolean> {
-    const fileName = type === FileType.HEADER ? 'header' : 'avatar';
     const networkPath = getNetworkPath(network);
-    const filePath = `${networkPath}subname/${subname}/${fileName}`;
+    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
@@ -119,9 +116,8 @@ export class StorageService {
    * Download a stored file and return its buffer and content type if present.
    */
   async getFileBuffer(subname: string, network: Network, type: FileType): Promise<{ buffer: Buffer; contentType: string } | null> {
-    const fileName = type === FileType.HEADER ? 'header' : 'avatar';
     const networkPath = getNetworkPath(network);
-    const filePath = `${networkPath}subname/${subname}/${fileName}`;
+    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
