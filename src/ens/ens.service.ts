@@ -66,11 +66,41 @@ export class EnsService {
     }
   }
 
+  /**
+   * Get the owner address for an ENS name without throwing errors.
+   * Returns null if the ENS record doesn't exist.
+   * Used for checking ENS records before deciding upload flow.
+   */
+  async getOwnerOrNull(params: { subname: string; network: Network }): Promise<string | null> {
+    const { subname, network } = params;
+    
+    // if (!isValidNetwork(network)) {
+    //   return null;
+    // }
+
+    const ens = subname.trim();
+    if (!ens) {
+      return null;
+    }
+
+    let normalized: string;
+    try {
+      normalized = normalize(ens);
+    } catch {
+      return null;
+    }
+
+    return await this.getOwner(normalized, network);
+  }
+
   private async getOwner(name: string, network: Network): Promise<string | null> {
     const key = `${network}:${name.toLowerCase()}`;
     const now = Date.now();
     const cached = this.cache.get(key);
-    if (cached && now - cached.fetchedAt < this.ttlMs) return cached.owner;
+    if (cached && now - cached.fetchedAt < this.ttlMs) {
+      // Return null if cached owner is empty string
+      return cached.owner || null;
+    }
 
     const client = network === Network.MAINNET ? this.mainnetClient : this.sepoliaClient;
     const owner = await getEnsAddress(client, { name: normalize(name) });

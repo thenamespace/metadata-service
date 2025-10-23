@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
   Param,
@@ -21,6 +22,7 @@ import { AvatarDeleteDto, HeaderDeleteDto } from './dto/avatar-upload.dto';
 import { AvatarService, UploadResult } from './avatar.service';
 import { AuthService } from '../auth/auth.service';
 import { Network, isValidNetwork } from '../common/enums/network.enum';
+import { PendingUploadQueueService, IPendingUploadEntry } from '../queue';
 
 type MultipartBufferFile = {
   filename: string;
@@ -64,6 +66,7 @@ export class AvatarController {
     private readonly ensService: EnsService,
     private readonly avatarService: AvatarService,
     private readonly authService: AuthService,
+    private readonly queueService: PendingUploadQueueService,
   ) {}
 
   private getTextField(value: unknown): string {
@@ -146,17 +149,68 @@ export class AvatarController {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
-    const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.AVATAR);
-    return {
-      subname,
-      network,
-      avatarUrl: result.url,
-      uploadedAt: result.uploadedAt,
-      fileSize: result.fileSize,
-      isUpdate: result.isUpdate,
-    };
+    // Check if ENS record exists
+    const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
+
+    if (ensOwner === null) {
+      // ENS record doesn't exist - pending upload flow
+      const existingFile = await this.storageService.getFileBuffer(subname, network, FileType.AVATAR);
+      if (existingFile) {
+        throw new BadRequestException({
+          code: ErrorCodes.PENDING_UPLOAD_EXISTS,
+          message: 'Avatar upload pending verification. Wait 5 minutes or set ENS record first.',
+        });
+      }
+
+      // Upload and queue for verification
+      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.AVATAR);
+      const queueEntry: IPendingUploadEntry = {
+        subname,
+        network,
+        address: verifiedAddress,
+        uploadedAt: new Date(),
+        fileType: FileType.AVATAR,
+      };
+      await this.queueService.add(queueEntry);
+
+      this.logger.log({
+        msg: 'Avatar upload queued for verification',
+        subname,
+        network,
+        address: verifiedAddress,
+      });
+
+      return {
+        subname,
+        network,
+        avatarUrl: result.url,
+        uploadedAt: result.uploadedAt,
+        fileSize: result.fileSize,
+        isUpdate: result.isUpdate,
+        pending: true,
+        message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+      };
+    } else {
+      // ENS record exists - verify ownership
+      if (ensOwner.toLowerCase() !== verifiedAddress.toLowerCase()) {
+        throw new ForbiddenException({
+          code: ErrorCodes.NOT_SUBNAME_OWNER,
+          details: { subname, network },
+        });
+      }
+
+      // Proceed with immediate upload
+      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.AVATAR);
+      return {
+        subname,
+        network,
+        avatarUrl: result.url,
+        uploadedAt: result.uploadedAt,
+        fileSize: result.fileSize,
+        isUpdate: result.isUpdate,
+      };
+    }
   }
 
   @Delete(':network/:subname/avatar')
@@ -270,17 +324,68 @@ export class AvatarController {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
-    const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.HEADER);
-    return {
-      subname,
-      network,
-      headerUrl: result.url,
-      uploadedAt: result.uploadedAt,
-      fileSize: result.fileSize,
-      isUpdate: result.isUpdate,
-    };
+    // Check if ENS record exists
+    const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
+
+    if (ensOwner === null) {
+      // ENS record doesn't exist - pending upload flow
+      const existingFile = await this.storageService.getFileBuffer(subname, network, FileType.HEADER);
+      if (existingFile) {
+        throw new BadRequestException({
+          code: ErrorCodes.PENDING_UPLOAD_EXISTS,
+          message: 'Header upload pending verification. Wait 5 minutes or set ENS record first.',
+        });
+      }
+
+      // Upload and queue for verification
+      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.HEADER);
+      const queueEntry: IPendingUploadEntry = {
+        subname,
+        network,
+        address: verifiedAddress,
+        uploadedAt: new Date(),
+        fileType: FileType.HEADER,
+      };
+      await this.queueService.add(queueEntry);
+
+      this.logger.log({
+        msg: 'Header upload queued for verification',
+        subname,
+        network,
+        address: verifiedAddress,
+      });
+
+      return {
+        subname,
+        network,
+        headerUrl: result.url,
+        uploadedAt: result.uploadedAt,
+        fileSize: result.fileSize,
+        isUpdate: result.isUpdate,
+        pending: true,
+        message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+      };
+    } else {
+      // ENS record exists - verify ownership
+      if (ensOwner.toLowerCase() !== verifiedAddress.toLowerCase()) {
+        throw new ForbiddenException({
+          code: ErrorCodes.NOT_SUBNAME_OWNER,
+          details: { subname, network },
+        });
+      }
+
+      // Proceed with immediate upload
+      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.HEADER);
+      return {
+        subname,
+        network,
+        headerUrl: result.url,
+        uploadedAt: result.uploadedAt,
+        fileSize: result.fileSize,
+        isUpdate: result.isUpdate,
+      };
+    }
   }
 
   @Delete(':network/:subname/header')
