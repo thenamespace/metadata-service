@@ -60,7 +60,7 @@ export class EnsService {
     } catch {
       throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { subname } });
     }
-    const owner = await this.getOwner(normalized, network);
+    const owner = await this.getDefaultAddressRecord(normalized, network);
     if (!owner || owner.toLowerCase() !== address.toLowerCase()) {
       throw new ForbiddenException({ code: ErrorCodes.NOT_SUBNAME_OWNER, details: { subname, network } });
     }
@@ -90,10 +90,10 @@ export class EnsService {
       return null;
     }
 
-    return await this.getOwner(normalized, network);
+    return await this.getDefaultAddressRecord(normalized, network);
   }
 
-  private async getOwner(name: string, network: Network): Promise<string | null> {
+  private async getDefaultAddressRecord(name: string, network: Network): Promise<string | null> {
     const key = `${network}:${name.toLowerCase()}`;
     const now = Date.now();
     const cached = this.cache.get(key);
