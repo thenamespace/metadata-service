@@ -86,9 +86,21 @@ export class AvatarController {
 
   @Post(':network/:subname/avatar')
   @UploadRateLimit()
-  @ApiOperation({ summary: 'Upload or update avatar for a subname' })
-  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
-  @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
+  @ApiOperation({ 
+    summary: 'Upload or update avatar for a subname',
+    description: `Upload or update an avatar image for an ENS subname with SIWE authentication.`
+  })
+  @ApiParam({ 
+    name: 'network', 
+    enum: Network, 
+    example: 'mainnet',
+    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+  })
+  @ApiParam({ 
+    name: 'subname', 
+    example: 'avatar.offchainsub.eth',
+    description: 'ENS subname (e.g., avatar.offchainsub.eth, alice.eth)'
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -119,16 +131,35 @@ export class AvatarController {
     },
   })
   @ApiOkResponse({
-    description: 'Avatar uploaded or updated',
+    description: 'Avatar uploaded or updated successfully. Returns immediate confirmation if ENS record exists, or pending status if upload is queued for verification.',
     type: AvatarUploadResponseDto,
     schema: {
-      example: {
-        subname: 'avatar.offchainsub.eth',
-        avatarUrl: 'https://avatars.namespace.ninja/subname/avatar.offchainsub.eth/avatar?timestamp=1757935476031',
-        uploadedAt: '2025-09-15T11:24:36.031Z',
-        fileSize: 97500,
-        isUpdate: true,
-      },
+      oneOf: [
+        {
+          description: 'Avatar uploaded or updated successfully',
+          example: {
+            subname: 'avatar.offchainsub.eth',
+            network: 'mainnet',
+            avatarUrl: 'https://avtr.cc/avatar.offchainsub.eth',
+            uploadedAt: '2025-10-24T10:30:00.000Z',
+            fileSize: 97500,
+            isUpdate: true,
+          },
+        },
+        {
+          description: 'Pending upload (ENS record not set yet)',
+          example: {
+            subname: 'avatar.offchainsub.eth',
+            network: 'mainnet',
+            avatarUrl: 'https://avtr.cc/avatar.offchainsub.eth',
+            uploadedAt: '2025-10-24T10:30:00.000Z',
+            fileSize: 97500,
+            isUpdate: false,
+            pending: true,
+            message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+          },
+        },
+      ],
     },
   })
   @HttpCode(HttpStatus.OK)
@@ -215,19 +246,32 @@ export class AvatarController {
 
   @Delete(':network/:subname/avatar')
   @DeleteRateLimit()
-  @ApiOperation({ summary: 'Delete avatar for a subname' })
-  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
-  @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
+  @ApiOperation({ 
+    summary: 'Delete avatar for a subname',
+    description: 'Delete the avatar image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP'
+  })
+  @ApiParam({ 
+    name: 'network', 
+    enum: Network, 
+    example: 'mainnet',
+    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+  })
+  @ApiParam({ 
+    name: 'subname', 
+    example: 'alice.eth',
+    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
+  })
   @ApiBody({ type: AvatarDeleteDto })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
-    description: 'Avatar deleted',
+    description: 'Avatar deleted successfully',
     type: DeleteResponseDto,
     schema: {
       example: {
-        subname: 'avatar.offchainsub.eth',
+        subname: 'alice.eth',
+        network: 'mainnet',
         message: 'Avatar deleted successfully',
-        deletedAt: '2025-09-15T11:27:50.626Z',
+        deletedAt: '2025-10-24T10:35:00.000Z',
       },
     },
   })
@@ -260,9 +304,21 @@ export class AvatarController {
 
   @Post(':network/:subname/header')
   @UploadRateLimit()
-  @ApiOperation({ summary: 'Upload or update header image for a subname' })
-  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
-  @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
+  @ApiOperation({ 
+    summary: 'Upload or update header image for a subname',
+    description: `Upload or update a header image for an ENS subname with SIWE authentication.`
+  })
+  @ApiParam({ 
+    name: 'network', 
+    enum: Network, 
+    example: 'mainnet',
+    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+  })
+  @ApiParam({ 
+    name: 'subname', 
+    example: 'alice.eth',
+    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -293,16 +349,35 @@ export class AvatarController {
     },
   })
   @ApiOkResponse({
-    description: 'Header uploaded or updated',
+    description: 'Header uploaded or updated successfully. Returns immediate confirmation if ENS record exists, or pending status if upload is queued for verification.',
     type: HeaderUploadResponseDto,
     schema: {
-      example: {
-        subname: 'avatar.offchainsub.eth',
-        headerUrl: 'https://avatars.namespace.ninja/subname/avatar.offchainsub.eth/header',
-        uploadedAt: '2025-09-15T11:27:08.925Z',
-        fileSize: 131131,
-        isUpdate: false,
-      },
+      oneOf: [
+        {
+          description: 'Immediate upload (ENS record exists)',
+          example: {
+            subname: 'alice.eth',
+            network: 'mainnet',
+            headerUrl: 'https://avtr.cc/alice.eth/header',
+            uploadedAt: '2025-10-24T10:30:00.000Z',
+            fileSize: 131131,
+            isUpdate: false,
+          },
+        },
+        {
+          description: 'Pending upload (ENS record not set yet)',
+          example: {
+            subname: 'alice.eth',
+            network: 'mainnet',
+            headerUrl: 'https://avtr.cc/alice.eth/header',
+            uploadedAt: '2025-10-24T10:30:00.000Z',
+            fileSize: 131131,
+            isUpdate: false,
+            pending: true,
+            message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+          },
+        },
+      ],
     },
   })
   @HttpCode(HttpStatus.OK)
@@ -390,19 +465,32 @@ export class AvatarController {
 
   @Delete(':network/:subname/header')
   @DeleteRateLimit()
-  @ApiOperation({ summary: 'Delete header image for a subname' })
-  @ApiParam({ name: 'network', enum: Network, example: 'mainnet' })
-  @ApiParam({ name: 'subname', example: 'avatar.offchainsub.eth' })
+  @ApiOperation({ 
+    summary: 'Delete header image for a subname',
+    description: 'Delete the header image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP'
+  })
+  @ApiParam({ 
+    name: 'network', 
+    enum: Network, 
+    example: 'mainnet',
+    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+  })
+  @ApiParam({ 
+    name: 'subname', 
+    example: 'alice.eth',
+    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
+  })
   @ApiBody({ type: HeaderDeleteDto })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
-    description: 'Header deleted',
+    description: 'Header deleted successfully',
     type: DeleteResponseDto,
     schema: {
       example: {
-        subname: 'avatar.offchainsub.eth',
+        subname: 'alice.eth',
+        network: 'mainnet',
         message: 'Header deleted successfully',
-        deletedAt: '2025-09-15T11:27:50.626Z',
+        deletedAt: '2025-10-24T10:35:00.000Z',
       },
     },
   })
