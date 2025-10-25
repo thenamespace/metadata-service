@@ -35,30 +35,26 @@ export class StorageService {
   private initializeGCS(): void {
     const projectId = this.configService.get<string>('GCLOUD_PROJECT_ID');
     const clientEmail = this.configService.get<string>('GCLOUD_BUCKET_CLIENT_EMAIL');
-    const privateKeyB64 = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY');
-    const scopes = this.configService.get<string>('GCLOUD_SCOPES');
-
-    if (!privateKeyB64) {
-      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY environment variable is required for GCS mode');
-    }
+    const privateKey = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY');
+    const privateKeyId = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY_ID');
     if (!projectId) {
       throw new Error('GCLOUD_PROJECT_ID environment variable is required for GCS mode');
     }
     if (!clientEmail) {
       throw new Error('GCLOUD_BUCKET_CLIENT_EMAIL environment variable is required for GCS mode');
     }
-    if (!scopes) {
-      throw new Error('GCLOUD_SCOPES environment variable is required for GCS mode');
+    if (!privateKey) {
+      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY environment variable is required for GCS mode');
     }
-
-    const privateKey = Buffer.from(privateKeyB64, 'base64').toString('utf8').replace(/\\n/g, '\n');
-
+    if (!privateKeyId) {
+      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY_ID environment variable is required for GCS mode');
+    }
     this.storage = new Storage({
       projectId,
-      scopes: [scopes],
       credentials: {
         client_email: clientEmail,
         private_key: privateKey,
+        private_key_id: privateKeyId,
       },
     }) as unknown as GoogleStorageLike;
   }
