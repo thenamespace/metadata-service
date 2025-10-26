@@ -35,7 +35,7 @@ export class StorageService {
   private initializeGCS(): void {
     const projectId = this.configService.get<string>('GCLOUD_PROJECT_ID');
     const clientEmail = this.configService.get<string>('GCLOUD_BUCKET_CLIENT_EMAIL');
-    const privateKey = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY');
+    const privateKeyBase64 = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY');
     const privateKeyId = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY_ID');
     if (!projectId) {
       throw new Error('GCLOUD_PROJECT_ID environment variable is required for GCS mode');
@@ -43,12 +43,16 @@ export class StorageService {
     if (!clientEmail) {
       throw new Error('GCLOUD_BUCKET_CLIENT_EMAIL environment variable is required for GCS mode');
     }
-    if (!privateKey) {
+    if (!privateKeyBase64) {
       throw new Error('GCLOUD_BUCKET_PRIVATE_KEY environment variable is required for GCS mode');
     }
     if (!privateKeyId) {
       throw new Error('GCLOUD_BUCKET_PRIVATE_KEY_ID environment variable is required for GCS mode');
     }
+    
+    // Decode base64-encoded private key to get proper PEM format
+    const privateKey = Buffer.from(privateKeyBase64, 'base64').toString('utf-8');
+    
     this.storage = new Storage({
       projectId,
       credentials: {

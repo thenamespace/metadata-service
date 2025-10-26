@@ -58,7 +58,7 @@ GCLOUD_PROJECT_ID=
 GCLOUD_BUCKET_NAME=avatars.namespace.ninja
 GCLOUD_BUCKET_CLIENT_EMAIL=
 GCLOUD_BUCKET_PRIVATE_KEY_ID=
-# Private key in PEM format (raw, not base64-encoded)
+# Private key in base64-encoded PEM format
 GCLOUD_BUCKET_PRIVATE_KEY=
 ```
 
@@ -156,7 +156,7 @@ SIWE is supported on chain ids `1` (Mainnet) and `11155111` (Sepolia).
 | `GCLOUD_BUCKET_NAME`           | GCS bucket name                            | No       | `avatars.namespace.ninja`                |
 | `GCLOUD_BUCKET_CLIENT_EMAIL`   | Service account email                      | Yes      | -                                        |
 | `GCLOUD_BUCKET_PRIVATE_KEY_ID` | Service account private key ID             | Yes      | -                                        |
-| `GCLOUD_BUCKET_PRIVATE_KEY`    | Private key in PEM format (raw)            | Yes      | -                                        |
+| `GCLOUD_BUCKET_PRIVATE_KEY`    | Private key in base64-encoded PEM format   | Yes      | -                                        |
 
 ## Rate Limiting
 
@@ -270,7 +270,7 @@ docker run -p 3000:3000 \
   -e GCLOUD_BUCKET_NAME=avatars.namespace.ninja \
   -e GCLOUD_BUCKET_CLIENT_EMAIL=service-account@your-project.iam.gserviceaccount.com \
   -e GCLOUD_BUCKET_PRIVATE_KEY_ID=your-private-key-id \
-  -e GCLOUD_BUCKET_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n" \
+  -e GCLOUD_BUCKET_PRIVATE_KEY="base64-encoded-private-key-here" \
   metadata-service
 ```
 
@@ -282,7 +282,7 @@ docker run -p 3000:3000 \
 4. **Caching**: Image generation results are cached in memory
 5. **Health Checks**: Use `/health` endpoint for load balancer health checks
 6. **Auth**: Protect profile avatar/header mutations with direct SIWE signature verification
-7. **Storage**: Use `gcs` in production; provide private key in PEM format and private key ID
+7. **Storage**: Use `gcs` in production; provide private key in base64-encoded PEM format and private key ID
 
 ## Migration from Indexer
 
