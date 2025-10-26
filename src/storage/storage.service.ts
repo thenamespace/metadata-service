@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Injectable, Logger } from '@nestjs/common';
 import { Storage } from '@google-cloud/storage';
 import { FileType } from '../common/enums/file-type.enum';
@@ -36,30 +35,26 @@ export class StorageService {
   private initializeGCS(): void {
     const projectId = this.configService.get<string>('GCLOUD_PROJECT_ID');
     const clientEmail = this.configService.get<string>('GCLOUD_BUCKET_CLIENT_EMAIL');
-    const privateKeyB64 = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY');
-    const scopes = this.configService.get<string>('GCLOUD_SCOPES');
-
-    if (!privateKeyB64) {
-      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY environment variable is required for GCS mode');
-    }
+    const privateKey = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY');
+    const privateKeyId = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY_ID');
     if (!projectId) {
       throw new Error('GCLOUD_PROJECT_ID environment variable is required for GCS mode');
     }
     if (!clientEmail) {
       throw new Error('GCLOUD_BUCKET_CLIENT_EMAIL environment variable is required for GCS mode');
     }
-    if (!scopes) {
-      throw new Error('GCLOUD_SCOPES environment variable is required for GCS mode');
+    if (!privateKey) {
+      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY environment variable is required for GCS mode');
     }
-
-    const privateKey = Buffer.from(privateKeyB64, 'base64').toString('utf8').replace(/\\n/g, '\n');
-
+    if (!privateKeyId) {
+      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY_ID environment variable is required for GCS mode');
+    }
     this.storage = new Storage({
       projectId,
-      scopes: [scopes],
       credentials: {
         client_email: clientEmail,
         private_key: privateKey,
+        private_key_id: privateKeyId,
       },
     }) as unknown as GoogleStorageLike;
   }
@@ -69,7 +64,7 @@ export class StorageService {
    */
   getPublicUrl(subname: string, network: Network, type: FileType = FileType.AVATAR, timestamp?: string): string {
     const networkPath = getNetworkPath(network);
-    const basePath = `${networkPath}subname/${subname}/${type === FileType.HEADER ? 'header' : 'avatar'}`;
+    const basePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     const baseUrl = `https://${this.bucketName}/${basePath}`;
     return timestamp ? `${baseUrl}?timestamp=${timestamp}` : baseUrl;
   }
@@ -78,9 +73,8 @@ export class StorageService {
    * Save a file to the configured storage backend with content type metadata.
    */
   async save(subname: string, network: Network, buffer: Buffer, type: FileType = FileType.AVATAR, contentType: string): Promise<void> {
-    const fileName = type === FileType.HEADER ? 'header' : 'avatar';
     const networkPath = getNetworkPath(network);
-    const filePath = `${networkPath}subname/${subname}/${fileName}`;
+    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
@@ -100,9 +94,8 @@ export class StorageService {
    * Delete a stored file; returns true if deleted or existed, false if missing.
    */
   async delete(subname: string, network: Network, type: FileType = FileType.AVATAR): Promise<boolean> {
-    const fileName = type === FileType.HEADER ? 'header' : 'avatar';
     const networkPath = getNetworkPath(network);
-    const filePath = `${networkPath}subname/${subname}/${fileName}`;
+    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
@@ -119,9 +112,8 @@ export class StorageService {
    * Download a stored file and return its buffer and content type if present.
    */
   async getFileBuffer(subname: string, network: Network, type: FileType): Promise<{ buffer: Buffer; contentType: string } | null> {
-    const fileName = type === FileType.HEADER ? 'header' : 'avatar';
     const networkPath = getNetworkPath(network);
-    const filePath = `${networkPath}subname/${subname}/${fileName}`;
+    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
