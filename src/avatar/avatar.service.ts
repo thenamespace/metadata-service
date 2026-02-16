@@ -111,6 +111,7 @@ export class AvatarService {
       SupportedMimeTypes.PNG,
       SupportedMimeTypes.GIF,
       SupportedMimeTypes.WEBP,
+      SupportedMimeTypes.SVG,
     ]);
     if (!allowed.has(mimetype)) {
       throw new BadRequestException({ code: 'UNSUPPORTED_MIME', details: { mimetype } });

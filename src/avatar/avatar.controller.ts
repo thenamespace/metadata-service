@@ -67,7 +67,7 @@ export class AvatarController {
     private readonly avatarService: AvatarService,
     private readonly authService: AuthService,
     private readonly queueService: PendingUploadQueueService,
-  ) {}
+  ) { }
 
   private getTextField(value: unknown): string {
     if (typeof value === 'string') return value;
@@ -86,18 +86,18 @@ export class AvatarController {
 
   @Post(':network/:subname/avatar')
   @UploadRateLimit()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Upload or update avatar for a subname',
     description: `Upload or update an avatar image for an ENS subname with SIWE authentication.`
   })
-  @ApiParam({ 
-    name: 'network', 
-    enum: Network, 
+  @ApiParam({
+    name: 'network',
+    enum: Network,
     example: 'mainnet',
     description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
   })
-  @ApiParam({ 
-    name: 'subname', 
+  @ApiParam({
+    name: 'subname',
     example: 'avatar.offchainsub.eth',
     description: 'ENS subname (e.g., avatar.offchainsub.eth, alice.eth)'
   })
@@ -109,20 +109,20 @@ export class AvatarController {
         avatar: {
           type: 'string',
           format: 'binary',
-          description: 'Image file (jpg, jpeg, png, gif, webp)',
+          description: 'Image file (jpg, jpeg, png, gif, webp, svg)',
         },
-        siweMessage: { 
-          type: 'string', 
+        siweMessage: {
+          type: 'string',
           description: 'SIWE message string',
           example: 'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z'
         },
-        siweSignature: { 
-          type: 'string', 
+        siweSignature: {
+          type: 'string',
           description: 'Signature for SIWE message',
           example: '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b'
         },
-        address: { 
-          type: 'string', 
+        address: {
+          type: 'string',
           description: 'Wallet address (checks against SIWE)',
           example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
         },
@@ -246,18 +246,18 @@ export class AvatarController {
 
   @Delete(':network/:subname/avatar')
   @DeleteRateLimit()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Delete avatar for a subname',
     description: 'Delete the avatar image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP'
   })
-  @ApiParam({ 
-    name: 'network', 
-    enum: Network, 
+  @ApiParam({
+    name: 'network',
+    enum: Network,
     example: 'mainnet',
     description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
   })
-  @ApiParam({ 
-    name: 'subname', 
+  @ApiParam({
+    name: 'subname',
     example: 'alice.eth',
     description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
   })
@@ -304,18 +304,18 @@ export class AvatarController {
 
   @Post(':network/:subname/header')
   @UploadRateLimit()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Upload or update header image for a subname',
     description: `Upload or update a header image for an ENS subname with SIWE authentication.`
   })
-  @ApiParam({ 
-    name: 'network', 
-    enum: Network, 
+  @ApiParam({
+    name: 'network',
+    enum: Network,
     example: 'mainnet',
     description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
   })
-  @ApiParam({ 
-    name: 'subname', 
+  @ApiParam({
+    name: 'subname',
     example: 'alice.eth',
     description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
   })
@@ -327,20 +327,20 @@ export class AvatarController {
         header: {
           type: 'string',
           format: 'binary',
-          description: 'Header image file (jpg, jpeg, png, gif, webp)',
+          description: 'Header image file (jpg, jpeg, png, gif, webp, svg)',
         },
-        siweMessage: { 
-          type: 'string', 
+        siweMessage: {
+          type: 'string',
           description: 'SIWE message string',
           example: 'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z'
         },
-        siweSignature: { 
-          type: 'string', 
+        siweSignature: {
+          type: 'string',
           description: 'Signature for SIWE message',
           example: '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b'
         },
-        address: { 
-          type: 'string', 
+        address: {
+          type: 'string',
           description: 'Wallet address (checks against SIWE)',
           example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
         },
@@ -465,18 +465,18 @@ export class AvatarController {
 
   @Delete(':network/:subname/header')
   @DeleteRateLimit()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Delete header image for a subname',
     description: 'Delete the header image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP'
   })
-  @ApiParam({ 
-    name: 'network', 
-    enum: Network, 
+  @ApiParam({
+    name: 'network',
+    enum: Network,
     example: 'mainnet',
     description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
   })
-  @ApiParam({ 
-    name: 'subname', 
+  @ApiParam({
+    name: 'subname',
     example: 'alice.eth',
     description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
   })
@@ -505,7 +505,7 @@ export class AvatarController {
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
     const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature: dto.siweSignature, address: dto.address });
-      await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
+    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
     const deleted = await this.avatarService.delete(subname, network, FileType.HEADER);
     this.logger.log({ msg: 'Header delete result', network, subname, deleted });
