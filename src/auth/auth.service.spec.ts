@@ -363,4 +363,46 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
+
+  describe('EIP-1271 smart contract wallet', () => {
+    it('verifies via checkContractWalletSignature when EOA recovery does not match', async () => {
+      // A contract wallet "owns" SAFE_ADDR but the underlying signer is TEST_ADDR.
+      // To force the contract path, we use a config whose verifyMessage returns
+      // a non-matching address and whose checkContractWalletSignature returns true.
+      const SAFE_ADDR = '0x000000000000000000000000000000000000c0DE';
+      const config: SiweConfig = {
+        verifyMessage: async () => getAddress('0x000000000000000000000000000000000000dEaD'),
+        hashMessage: (m) => hashMessage(m),
+        getAddress: (a) => getAddress(a),
+        checkContractWalletSignature: async (address, _msg, _sig, _chainId) =>
+          address.toLowerCase() === SAFE_ADDR.toLowerCase(),
+      };
+      const mod = await buildModule({
+        configs: new Map<number, SiweConfig>([[1, config], [11155111, config]]),
+      });
+      const svc = mod.get(AuthService);
+      const { nonce } = svc.generateNonce(SAFE_ADDR, 'avatar+header');
+      // The message must claim SAFE_ADDR; the (fake) signature can be anything 130+ hex.
+      const message = new SiweMessage({
+        domain: 'namespace.ninja',
+        address: SAFE_ADDR,
+        statement: 'Sign in to Avatar Service',
+        uri: 'https://namespace.ninja',
+        version: '1',
+        chainId: 1,
+        nonce,
+        issuedAt: new Date().toISOString(),
+      }).prepareMessage();
+      const signature = '0x' + 'ab'.repeat(70);
+      const result = await svc.verifySiweAndConsume({
+        action: 'avatar',
+        message,
+        signature,
+        address: SAFE_ADDR,
+        domain: 'namespace.ninja',
+      });
+      expect(result.address).toBe(SAFE_ADDR.toLowerCase());
+      await mod.close();
+    });
+  });
 });
