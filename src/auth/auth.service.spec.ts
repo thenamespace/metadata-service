@@ -105,4 +105,78 @@ describe('AuthService', () => {
       expect(result).toEqual({ address: TEST_ADDR.toLowerCase() });
     });
   });
+
+  describe('EOA happy path during grace (no domain)', () => {
+    it('verifies, falls back to message-derived domain, returns address', async () => {
+      const { nonce } = service.generateNonce(TEST_ADDR);
+      const { message, signature } = await signedSiwe({ nonce });
+      const warn = jest.spyOn((service as any).logger, 'warn');
+      const result = await service.verifySiweAndConsume({
+        action: 'avatar',
+        message,
+        signature,
+        address: TEST_ADDR,
+      });
+      expect(result.address).toBe(TEST_ADDR.toLowerCase());
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('siwe.domain.deprecated'));
+    });
+  });
+
+  describe('post-grace, missing domain', () => {
+    it('rejects with MISSING_DOMAIN when SIWE_DOMAIN_REQUIRED=true', async () => {
+      const mod = await buildModule({ env: { SIWE_DOMAIN_REQUIRED: 'true' } });
+      const svc = mod.get(AuthService);
+      const { nonce } = svc.generateNonce(TEST_ADDR);
+      const { message, signature } = await signedSiwe({ nonce });
+      await expect(
+        svc.verifySiweAndConsume({ action: 'avatar', message, signature, address: TEST_ADDR }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.MISSING_DOMAIN } });
+      await mod.close();
+    });
+  });
+
+  describe('domain mismatch', () => {
+    it('rejects with DOMAIN_MISMATCH when caller domain != message domain', async () => {
+      const { nonce } = service.generateNonce(TEST_ADDR);
+      const { message, signature } = await signedSiwe({ nonce, domain: 'namespace.ninja' });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'evil.com',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.DOMAIN_MISMATCH } });
+    });
+  });
+
+  describe('nonce branches', () => {
+    it('rejects with NONCE_NOT_FOUND when no nonce was generated', async () => {
+      const { message, signature } = await signedSiwe({ nonce: 'abcdefghij1234567890' });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.NONCE_NOT_FOUND } });
+    });
+
+    it('rejects with NONCE_MISMATCH when message nonce differs from stored', async () => {
+      service.generateNonce(TEST_ADDR);
+      const { message, signature } = await signedSiwe({ nonce: 'WRONGnonce1234567890abc' });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.NONCE_MISMATCH } });
+    });
+  });
 });
