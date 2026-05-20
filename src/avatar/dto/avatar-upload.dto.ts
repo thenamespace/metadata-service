@@ -1,4 +1,4 @@
-import { IsEthereumAddress, IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsEthereumAddress, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AvatarUploadDto {
@@ -16,8 +16,8 @@ export class AvatarUploadDto {
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[a-fA-F0-9]{130,}$/, { 
-    message: 'Invalid signature format - must be at least 130 hex characters (65 bytes) for EOA signatures, or longer for smart contract signatures' 
+  @Matches(/^0x[a-fA-F0-9]{130,}$/, {
+    message: 'Invalid signature format - must be at least 130 hex characters (65 bytes) for EOA signatures, or longer for smart contract signatures'
   })
   siweSignature!: string;
 
@@ -27,10 +27,19 @@ export class AvatarUploadDto {
   })
   @IsEthereumAddress()
   address!: string;
+
+  @ApiProperty({
+    description: 'DNS authority the SIWE message was signed for (e.g. app.example.com). Asserted equal to message.domain. Optional during the 1-week grace period; required after the follow-up PR.',
+    example: 'namespace.ninja',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(253)
+  domain?: string;
 }
 
 export class HeaderUploadDto extends AvatarUploadDto {}
-
 export class AvatarDeleteDto extends AvatarUploadDto {}
-
 export class HeaderDeleteDto extends AvatarUploadDto {}
