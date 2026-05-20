@@ -50,6 +50,7 @@ interface LocalRequest {
     siweMessage?: unknown;
     siweSignature?: unknown;
     address?: unknown;
+    domain?: unknown;
   };
 }
 
@@ -126,6 +127,11 @@ export class AvatarController {
           description: 'Wallet address (checks against SIWE)',
           example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
         },
+        domain: {
+          type: 'string',
+          description: 'DNS authority the SIWE message was signed for. Optional during the 1-week grace period.',
+          example: 'namespace.ninja',
+        },
       },
       required: ['avatar', 'siweMessage', 'siweSignature', 'address'],
     },
@@ -176,10 +182,11 @@ export class AvatarController {
     const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);
+    const domain = this.getTextField(r.body?.domain) || undefined;
     if (!message || !signature || !address) {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address });
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address, domain });
 
     // Check if ENS record exists
     const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
@@ -285,7 +292,7 @@ export class AvatarController {
     }
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature: dto.siweSignature, address: dto.address });
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature: dto.siweSignature, address: dto.address, domain: dto.domain });
     await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
     const deleted = await this.avatarService.delete(subname, network, FileType.AVATAR);
@@ -344,6 +351,11 @@ export class AvatarController {
           description: 'Wallet address (checks against SIWE)',
           example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
         },
+        domain: {
+          type: 'string',
+          description: 'DNS authority the SIWE message was signed for. Optional during the 1-week grace period.',
+          example: 'namespace.ninja',
+        },
       },
       required: ['header', 'siweMessage', 'siweSignature', 'address'],
     },
@@ -395,10 +407,11 @@ export class AvatarController {
     const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);
+    const domain = this.getTextField(r.body?.domain) || undefined;
     if (!message || !signature || !address) {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address });
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address, domain });
 
     // Check if ENS record exists
     const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
@@ -504,7 +517,7 @@ export class AvatarController {
     }
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature: dto.siweSignature, address: dto.address });
+    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature: dto.siweSignature, address: dto.address, domain: dto.domain });
     await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
 
     const deleted = await this.avatarService.delete(subname, network, FileType.HEADER);
