@@ -179,4 +179,112 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ response: { code: ErrorCodes.NONCE_MISMATCH } });
     });
   });
+
+  describe('time branches', () => {
+    it('rejects with SIGNATURE_EXPIRED when expirationTime is in the past', async () => {
+      const { nonce } = service.generateNonce(TEST_ADDR);
+      const past = new Date(Date.now() - 60_000).toISOString();
+      const { message, signature } = await signedSiwe({ nonce, expirationTime: past });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.SIGNATURE_EXPIRED } });
+    });
+
+    it('rejects with MESSAGE_NOT_YET_VALID when notBefore is in the future', async () => {
+      const { nonce } = service.generateNonce(TEST_ADDR);
+      const future = new Date(Date.now() + 60_000).toISOString();
+      const { message, signature } = await signedSiwe({ nonce, notBefore: future });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.MESSAGE_NOT_YET_VALID } });
+    });
+
+    it('rejects with SIGNATURE_EXPIRED when nonce-store TTL has passed', async () => {
+      const mod = await buildModule({ env: { SIWE_NONCE_TTL_MS: '1' } });
+      const svc = mod.get(AuthService);
+      const { nonce } = svc.generateNonce(TEST_ADDR);
+      await new Promise((r) => setTimeout(r, 10));
+      const { message, signature } = await signedSiwe({ nonce });
+      await expect(
+        svc.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.SIGNATURE_EXPIRED } });
+      await mod.close();
+    });
+  });
+
+  describe('chain branches', () => {
+    it('rejects with INVALID_CHAIN_ID when chainId not in SIWE_ALLOWED_CHAIN_IDS', async () => {
+      const mod = await buildModule({ env: { SIWE_ALLOWED_CHAIN_IDS: '1' } });
+      const svc = mod.get(AuthService);
+      const { nonce } = svc.generateNonce(TEST_ADDR);
+      const { message, signature } = await signedSiwe({ nonce, chainId: 137 });
+      await expect(
+        svc.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.INVALID_CHAIN_ID } });
+      await mod.close();
+    });
+  });
+
+  describe('address mismatch', () => {
+    it('rejects with ADDRESS_MISMATCH when body.address != recovered signer', async () => {
+      const otherPk = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
+      const otherAddr = privateKeyToAccount(otherPk).address;
+      const { nonce } = service.generateNonce(otherAddr);
+      // Sign a message AS otherPk but claim TEST_ADDR in the request body.
+      const { message, signature } = await signedSiwe({
+        nonce,
+        privateKey: otherPk as `0x${string}`,
+        address: otherAddr,
+      });
+      service.generateNonce(TEST_ADDR);
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  describe('malformed message', () => {
+    it('rejects with MALFORMED_MESSAGE when the message is unparseable', async () => {
+      service.generateNonce(TEST_ADDR);
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: 'this is not a SIWE message at all',
+          signature: '0x' + '00'.repeat(65),
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.MALFORMED_MESSAGE } });
+    });
+  });
 });
