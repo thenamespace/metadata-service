@@ -16,16 +16,20 @@ describe('mapSiweError', () => {
   });
 
   it('falls back to SIGNATURE_VERIFICATION_FAILED for INVALID_SIGNATURE', () => {
-    expect(mapSiweError({ type: SiweErrorType.INVALID_SIGNATURE }))
-      .toBe(ErrorCodes.SIGNATURE_VERIFICATION_FAILED);
+    expect(mapSiweError({ type: SiweErrorType.INVALID_SIGNATURE })).toBe(
+      ErrorCodes.SIGNATURE_VERIFICATION_FAILED,
+    );
   });
 
   it('falls back to SIGNATURE_VERIFICATION_FAILED for undefined err', () => {
-    expect(mapSiweError(undefined)).toBe(ErrorCodes.SIGNATURE_VERIFICATION_FAILED);
+    expect(mapSiweError(undefined)).toBe(
+      ErrorCodes.SIGNATURE_VERIFICATION_FAILED,
+    );
   });
 
   it('falls back to SIGNATURE_VERIFICATION_FAILED for unknown type', () => {
-    expect(mapSiweError({ type: 'TOTALLY_UNKNOWN' as SiweErrorType }))
-      .toBe(ErrorCodes.SIGNATURE_VERIFICATION_FAILED);
+    expect(mapSiweError({ type: 'TOTALLY_UNKNOWN' as SiweErrorType })).toBe(
+      ErrorCodes.SIGNATURE_VERIFICATION_FAILED,
+    );
   });
 });

@@ -19,19 +19,19 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  await app.register(cors as unknown as any, {
+  await app.register(cors, {
     origin: '*',
     methods: ['POST', 'GET', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: '*',
-  } as any);
+  });
 
-  await app.register(multipart as unknown as any, {
+  await app.register(multipart, {
     attachFieldsToBody: true,
     limits: {
       fileSize: 5 * 1024 * 1024,
       files: 1,
     },
-  } as any);
+  });
 
   // Static local serving removed; GCS is always used
 

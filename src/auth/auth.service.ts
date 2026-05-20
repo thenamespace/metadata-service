@@ -1,6 +1,17 @@
-import { Inject, Injectable, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SiweMessage, SiweConfig, generateNonce, isEIP6492Signature } from '@signinwithethereum/siwe';
+import {
+  SiweMessage,
+  SiweConfig,
+  generateNonce,
+  isEIP6492Signature,
+} from '@signinwithethereum/siwe';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 import { mapSiweError } from './siwe-error.mapper';
 import { SIWE_CONFIGS, SiweConfigsByChain } from './siwe.config';
@@ -37,10 +48,15 @@ export class AuthService {
     this.logger.log('AuthService initialized successfully');
   }
 
-  generateNonce(address: string, scope?: Scope): { nonce: string; expiresAt: number } {
+  generateNonce(
+    address: string,
+    scope?: Scope,
+  ): { nonce: string; expiresAt: number } {
     const nonce = generateNonce();
     const issuedAt = Date.now();
-    const ttlMs = Number(this.configService.get<number>('SIWE_NONCE_TTL_MS') || 5 * 60 * 1000);
+    const ttlMs = Number(
+      this.configService.get<number>('SIWE_NONCE_TTL_MS') || 5 * 60 * 1000,
+    );
     const expiresAt = issuedAt + ttlMs;
     const effectiveScope: Scope = scope ?? 'avatar+header';
     this.addressToNonce.set(address.toLowerCase(), {
@@ -56,11 +72,15 @@ export class AuthService {
   private configFor(chainId: number): SiweConfig {
     const config = this.siweConfigs.get(chainId);
     if (config) return config;
-    this.logger.warn(`No SiweConfig for chainId ${chainId}; falling back to mainnet`);
+    this.logger.warn(
+      `No SiweConfig for chainId ${chainId}; falling back to mainnet`,
+    );
     const fallback = this.siweConfigs.get(1);
     if (!fallback) {
       // Startup misconfiguration: factory must seed at least chainId 1.
-      throw new Error('No SiweConfig available for any supported chain (expected at least chainId 1)');
+      throw new Error(
+        'No SiweConfig available for any supported chain (expected at least chainId 1)',
+      );
     }
     return fallback;
   }
@@ -70,7 +90,9 @@ export class AuthService {
   }
 
   private getAllowedChainIds(): number[] {
-    return (this.configService.get<string>('SIWE_ALLOWED_CHAIN_IDS') || '1,11155111')
+    return (
+      this.configService.get<string>('SIWE_ALLOWED_CHAIN_IDS') || '1,11155111'
+    )
       .split(',')
       .map((v) => v.trim())
       .filter(Boolean)
@@ -78,14 +100,27 @@ export class AuthService {
       .filter((v) => Number.isFinite(v));
   }
 
-  async verifySiweAndConsume(params: VerificationParams): Promise<{ address: string }> {
-    const { action, message, signature, address, domain: providedDomain } = params;
+  async verifySiweAndConsume(
+    params: VerificationParams,
+  ): Promise<{ address: string }> {
+    const {
+      action,
+      message,
+      signature,
+      address,
+      domain: providedDomain,
+    } = params;
     const lower = address.toLowerCase();
-    this.logger.log(`siwe.verify.attempt ${JSON.stringify({ address: lower, assertedDomain: providedDomain ?? null })}`);
+    this.logger.log(
+      `siwe.verify.attempt ${JSON.stringify({ address: lower, assertedDomain: providedDomain ?? null })}`,
+    );
 
     const record = this.addressToNonce.get(lower);
     if (!record) {
-      throw new UnauthorizedException({ code: ErrorCodes.NONCE_NOT_FOUND, details: { address } });
+      throw new UnauthorizedException({
+        code: ErrorCodes.NONCE_NOT_FOUND,
+        details: { address },
+      });
     }
 
     let siwe: SiweMessage;
@@ -118,7 +153,10 @@ export class AuthService {
     const chainId = Number(siwe.chainId);
     const allowedChainIds = this.getAllowedChainIds();
     if (allowedChainIds.length > 0 && !allowedChainIds.includes(chainId)) {
-      throw new UnauthorizedException({ code: ErrorCodes.INVALID_CHAIN_ID, details: { chainId } });
+      throw new UnauthorizedException({
+        code: ErrorCodes.INVALID_CHAIN_ID,
+        details: { chainId },
+      });
     }
 
     // v4 verify
@@ -168,7 +206,9 @@ export class AuthService {
       this.addressToNonce.set(lower, record);
     }
 
-    const signatureType = isEIP6492Signature(signature) ? 'eip6492' : 'standard';
+    const signatureType = isEIP6492Signature(signature)
+      ? 'eip6492'
+      : 'standard';
     this.logger.log(
       `siwe.verify.success ${JSON.stringify({ address: lower, domain: effectiveDomain, chainId, signatureType })}`,
     );

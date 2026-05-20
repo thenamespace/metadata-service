@@ -8,7 +8,13 @@ import { Network, getNetworkPath } from '../common/enums/network.enum';
 type GoogleStorageLike = {
   bucket: (name: string) => {
     file: (path: string) => {
-      save: (buffer: Buffer, opts: { metadata: { contentType: string; cacheControl?: string }; resumable?: boolean }) => Promise<void>;
+      save: (
+        buffer: Buffer,
+        opts: {
+          metadata: { contentType: string; cacheControl?: string };
+          resumable?: boolean;
+        },
+      ) => Promise<void>;
       delete: () => Promise<void>;
       exists: () => Promise<[boolean]>;
       download: () => Promise<[Buffer]>;
@@ -28,31 +34,49 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
 
   constructor(private readonly configService: ConfigService) {
-    this.bucketName = this.configService.get<string>('GCLOUD_BUCKET_NAME') || 'avatars.namespace.ninja';
+    this.bucketName =
+      this.configService.get<string>('GCLOUD_BUCKET_NAME') ||
+      'avatars.namespace.ninja';
     this.initializeGCS();
   }
 
   private initializeGCS(): void {
     const projectId = this.configService.get<string>('GCLOUD_PROJECT_ID');
-    const clientEmail = this.configService.get<string>('GCLOUD_BUCKET_CLIENT_EMAIL');
-    const privateKeyBase64 = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY');
-    const privateKeyId = this.configService.get<string>('GCLOUD_BUCKET_PRIVATE_KEY_ID');
+    const clientEmail = this.configService.get<string>(
+      'GCLOUD_BUCKET_CLIENT_EMAIL',
+    );
+    const privateKeyBase64 = this.configService.get<string>(
+      'GCLOUD_BUCKET_PRIVATE_KEY',
+    );
+    const privateKeyId = this.configService.get<string>(
+      'GCLOUD_BUCKET_PRIVATE_KEY_ID',
+    );
     if (!projectId) {
-      throw new Error('GCLOUD_PROJECT_ID environment variable is required for GCS mode');
+      throw new Error(
+        'GCLOUD_PROJECT_ID environment variable is required for GCS mode',
+      );
     }
     if (!clientEmail) {
-      throw new Error('GCLOUD_BUCKET_CLIENT_EMAIL environment variable is required for GCS mode');
+      throw new Error(
+        'GCLOUD_BUCKET_CLIENT_EMAIL environment variable is required for GCS mode',
+      );
     }
     if (!privateKeyBase64) {
-      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY environment variable is required for GCS mode');
+      throw new Error(
+        'GCLOUD_BUCKET_PRIVATE_KEY environment variable is required for GCS mode',
+      );
     }
     if (!privateKeyId) {
-      throw new Error('GCLOUD_BUCKET_PRIVATE_KEY_ID environment variable is required for GCS mode');
+      throw new Error(
+        'GCLOUD_BUCKET_PRIVATE_KEY_ID environment variable is required for GCS mode',
+      );
     }
-    
+
     // Decode base64-encoded private key to get proper PEM format
-    const privateKey = Buffer.from(privateKeyBase64, 'base64').toString('utf-8');
-    
+    const privateKey = Buffer.from(privateKeyBase64, 'base64').toString(
+      'utf-8',
+    );
+
     this.storage = new Storage({
       projectId,
       credentials: {
@@ -66,9 +90,17 @@ export class StorageService {
   /**
    * Build a public URL for the stored file; adds a cache-busting timestamp on updates.
    */
-  getPublicUrl(subname: string, network: Network, type: FileType = FileType.AVATAR, timestamp?: string): string {
+  getPublicUrl(
+    subname: string,
+    network: Network,
+    type: FileType = FileType.AVATAR,
+    timestamp?: string,
+  ): string {
     const networkPath = getNetworkPath(network);
-    const basePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
+    const basePath =
+      type === FileType.HEADER
+        ? `${networkPath}${subname}/header`
+        : `${networkPath}${subname}`;
     const baseUrl = `https://${this.bucketName}/${basePath}`;
     return timestamp ? `${baseUrl}?timestamp=${timestamp}` : baseUrl;
   }
@@ -76,10 +108,19 @@ export class StorageService {
   /**
    * Save a file to the configured storage backend with content type metadata.
    */
-  async save(subname: string, network: Network, buffer: Buffer, type: FileType = FileType.AVATAR, contentType: string): Promise<void> {
+  async save(
+    subname: string,
+    network: Network,
+    buffer: Buffer,
+    type: FileType = FileType.AVATAR,
+    contentType: string,
+  ): Promise<void> {
     const networkPath = getNetworkPath(network);
-    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
-    
+    const filePath =
+      type === FileType.HEADER
+        ? `${networkPath}${subname}/header`
+        : `${networkPath}${subname}`;
+
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
     }
@@ -97,10 +138,17 @@ export class StorageService {
   /**
    * Delete a stored file; returns true if deleted or existed, false if missing.
    */
-  async delete(subname: string, network: Network, type: FileType = FileType.AVATAR): Promise<boolean> {
+  async delete(
+    subname: string,
+    network: Network,
+    type: FileType = FileType.AVATAR,
+  ): Promise<boolean> {
     const networkPath = getNetworkPath(network);
-    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
-    
+    const filePath =
+      type === FileType.HEADER
+        ? `${networkPath}${subname}/header`
+        : `${networkPath}${subname}`;
+
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
     }
@@ -115,10 +163,17 @@ export class StorageService {
   /**
    * Download a stored file and return its buffer and content type if present.
    */
-  async getFileBuffer(subname: string, network: Network, type: FileType): Promise<{ buffer: Buffer; contentType: string } | null> {
+  async getFileBuffer(
+    subname: string,
+    network: Network,
+    type: FileType,
+  ): Promise<{ buffer: Buffer; contentType: string } | null> {
     const networkPath = getNetworkPath(network);
-    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
-    
+    const filePath =
+      type === FileType.HEADER
+        ? `${networkPath}${subname}/header`
+        : `${networkPath}${subname}`;
+
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
     }
@@ -130,10 +185,13 @@ export class StorageService {
     try {
       const [buffer] = await file.download();
       const [metadata] = await file.getMetadata();
-      const contentType = metadata.contentType || this.detectContentType(buffer);
+      const contentType =
+        metadata.contentType || this.detectContentType(buffer);
       return { buffer, contentType };
     } catch (error) {
-      this.logger.error(`Failed to download file from GCS: ${filePath}, error: ${error}`);
+      this.logger.error(
+        `Failed to download file from GCS: ${filePath}, error: ${error}`,
+      );
       return null;
     }
   }
@@ -142,15 +200,25 @@ export class StorageService {
     // Simple content type detection based on file signatures
     if (buffer.length >= 4) {
       // PNG signature
-      if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
+      if (
+        buffer[0] === 0x89 &&
+        buffer[1] === 0x50 &&
+        buffer[2] === 0x4e &&
+        buffer[3] === 0x47
+      ) {
         return 'image/png';
       }
       // JPEG signature
-      if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+      if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
         return 'image/jpeg';
       }
       // WebP signature
-      if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
+      if (
+        buffer[0] === 0x52 &&
+        buffer[1] === 0x49 &&
+        buffer[2] === 0x46 &&
+        buffer[3] === 0x46
+      ) {
         return 'image/webp';
       }
       // GIF signature
@@ -158,13 +226,13 @@ export class StorageService {
         return 'image/gif';
       }
     }
-    
+
     // Check for SVG (text-based)
     const text = buffer.toString('utf8', 0, Math.min(100, buffer.length));
     if (text.includes('<svg') || text.includes('<?xml')) {
       return 'image/svg+xml';
     }
-    
+
     // Default fallback
     return 'image/jpeg';
   }

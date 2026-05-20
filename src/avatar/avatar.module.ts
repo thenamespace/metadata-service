@@ -10,22 +10,15 @@ import { AvatarVerificationService } from './avatar-verification.service';
 
 /**
  * Avatar module handles profile image uploads (avatars and headers)
- * 
+ *
  * @remarks
  * Supports both immediate uploads (for existing ENS names) and pending uploads
  * (for pre-registration). Pending uploads are verified via a cron job that checks
  * ENS records.
  */
 @Module({
-  imports: [
-    StorageModule,
-    AuthModule,
-    QueueModule,
-    ScheduleModule.forRoot(),
-  ],
+  imports: [StorageModule, AuthModule, QueueModule, ScheduleModule.forRoot()],
   controllers: [AvatarController],
   providers: [EnsService, AvatarService, AvatarVerificationService],
 })
 export class AvatarModule {}
-
-

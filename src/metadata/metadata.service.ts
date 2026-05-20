@@ -22,7 +22,6 @@ export class MetadataService {
       node = this.tokenIdToBytes32(tokenId);
       chainId = parseInt(chainIdStr, 10);
 
-
       if (isNaN(chainId)) {
         throw new Error('Invalid chain ID');
       }
@@ -78,7 +77,10 @@ export class MetadataService {
       throw new BadRequestException('Invalid parameters');
     }
     const nodeDTO = await this.subnameService.getL2Subname(node, chainId);
-    return this.avatarService.generateImageForName(nodeDTO.name, nodeDTO.avatar);
+    return this.avatarService.generateImageForName(
+      nodeDTO.name,
+      nodeDTO.avatar,
+    );
   }
 
   private tokenIdToBytes32(tokenId: string) {

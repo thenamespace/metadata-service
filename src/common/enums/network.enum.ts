@@ -16,6 +16,6 @@ export function getNetworkPath(network: Network): string {
     case Network.SEPOLIA:
       return 'sepolia/';
     default:
-      throw new Error(`Unsupported network: ${network}`);
+      throw new Error(`Unsupported network: ${network as string}`);
   }
 }

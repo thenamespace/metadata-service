@@ -6,7 +6,7 @@ import { IPendingUploadEntry, IPendingUploadQueue } from '../interfaces';
 /**
  * In-memory implementation of pending upload queue.
  * Uses a Map with composite keys for fast lookups.
- * 
+ *
  * @remarks
  * This implementation loses data on service restart, which is acceptable
  * per requirements. For production with high reliability needs, consider
@@ -20,7 +20,11 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
   /**
    * Generate a unique composite key for the queue entry
    */
-  private getKey(subname: string, network: Network, fileType: FileType): string {
+  private getKey(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): string {
     return `${network}:${subname.toLowerCase()}:${fileType}`;
   }
 
@@ -51,7 +55,11 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
-  async remove(subname: string, network: Network, fileType: FileType): Promise<boolean> {
+  async remove(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): Promise<boolean> {
     const key = this.getKey(subname, network, fileType);
     const deleted = this.queue.delete(key);
     if (deleted) {
@@ -67,7 +75,11 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
-  async get(subname: string, network: Network, fileType: FileType): Promise<IPendingUploadEntry | null> {
+  async get(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): Promise<IPendingUploadEntry | null> {
     const key = this.getKey(subname, network, fileType);
     return this.queue.get(key) || null;
   }
@@ -82,4 +94,3 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
     return this.queue.size;
   }
 }
-

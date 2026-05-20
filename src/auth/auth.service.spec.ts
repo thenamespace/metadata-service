@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { privateKeyToAccount } from 'viem/accounts';
 import { SiweMessage, SiweConfig } from '@signinwithethereum/siwe';
-import { keccak256, toBytes, getAddress, recoverAddress, hashMessage } from 'viem';
+import { getAddress, recoverAddress, hashMessage } from 'viem';
 import { AuthService } from './auth.service';
 import { SIWE_CONFIGS, SiweConfigsByChain } from './siwe.config';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
@@ -27,10 +27,12 @@ function eoaOnlyConfig(): SiweConfig {
   };
 }
 
-function buildModule(opts: {
-  env?: Record<string, string>;
-  configs?: SiweConfigsByChain;
-} = {}) {
+function buildModule(
+  opts: {
+    env?: Record<string, string>;
+    configs?: SiweConfigsByChain;
+  } = {},
+) {
   const env: Record<string, string> = {
     ALCHEMY_API_KEY: 'test',
     SIWE_ALLOWED_CHAIN_IDS: '1,11155111',
@@ -38,7 +40,11 @@ function buildModule(opts: {
     ...(opts.env ?? {}),
   };
   const configs: SiweConfigsByChain =
-    opts.configs ?? new Map<number, SiweConfig>([[1, eoaOnlyConfig()], [11155111, eoaOnlyConfig()]]);
+    opts.configs ??
+    new Map<number, SiweConfig>([
+      [1, eoaOnlyConfig()],
+      [11155111, eoaOnlyConfig()],
+    ]);
   return Test.createTestingModule({
     providers: [
       AuthService,
@@ -48,7 +54,8 @@ function buildModule(opts: {
   }).compile();
 }
 
-const TEST_PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+const TEST_PK =
+  '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
 const TEST_ADDR = privateKeyToAccount(TEST_PK).address;
 
 async function signedSiwe(opts: {
@@ -118,7 +125,9 @@ describe('AuthService', () => {
         address: TEST_ADDR,
       });
       expect(result.address).toBe(TEST_ADDR.toLowerCase());
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('siwe.domain.deprecated'));
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('siwe.domain.deprecated'),
+      );
     });
   });
 
@@ -129,8 +138,15 @@ describe('AuthService', () => {
       const { nonce } = svc.generateNonce(TEST_ADDR);
       const { message, signature } = await signedSiwe({ nonce });
       await expect(
-        svc.verifySiweAndConsume({ action: 'avatar', message, signature, address: TEST_ADDR }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.MISSING_DOMAIN } });
+        svc.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.MISSING_DOMAIN },
+      });
       await mod.close();
     });
   });
@@ -138,7 +154,10 @@ describe('AuthService', () => {
   describe('domain mismatch', () => {
     it('rejects with DOMAIN_MISMATCH when caller domain != message domain', async () => {
       const { nonce } = service.generateNonce(TEST_ADDR);
-      const { message, signature } = await signedSiwe({ nonce, domain: 'namespace.ninja' });
+      const { message, signature } = await signedSiwe({
+        nonce,
+        domain: 'namespace.ninja',
+      });
       await expect(
         service.verifySiweAndConsume({
           action: 'avatar',
@@ -147,13 +166,17 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'evil.com',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.DOMAIN_MISMATCH } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.DOMAIN_MISMATCH },
+      });
     });
   });
 
   describe('nonce branches', () => {
     it('rejects with NONCE_NOT_FOUND when no nonce was generated', async () => {
-      const { message, signature } = await signedSiwe({ nonce: 'abcdefghij1234567890' });
+      const { message, signature } = await signedSiwe({
+        nonce: 'abcdefghij1234567890',
+      });
       await expect(
         service.verifySiweAndConsume({
           action: 'avatar',
@@ -162,12 +185,16 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.NONCE_NOT_FOUND } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.NONCE_NOT_FOUND },
+      });
     });
 
     it('rejects with NONCE_MISMATCH when message nonce differs from stored', async () => {
       service.generateNonce(TEST_ADDR);
-      const { message, signature } = await signedSiwe({ nonce: 'WRONGnonce1234567890abc' });
+      const { message, signature } = await signedSiwe({
+        nonce: 'WRONGnonce1234567890abc',
+      });
       await expect(
         service.verifySiweAndConsume({
           action: 'avatar',
@@ -176,7 +203,9 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.NONCE_MISMATCH } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.NONCE_MISMATCH },
+      });
     });
   });
 
@@ -184,7 +213,10 @@ describe('AuthService', () => {
     it('rejects with SIGNATURE_EXPIRED when expirationTime is in the past', async () => {
       const { nonce } = service.generateNonce(TEST_ADDR);
       const past = new Date(Date.now() - 60_000).toISOString();
-      const { message, signature } = await signedSiwe({ nonce, expirationTime: past });
+      const { message, signature } = await signedSiwe({
+        nonce,
+        expirationTime: past,
+      });
       await expect(
         service.verifySiweAndConsume({
           action: 'avatar',
@@ -193,13 +225,18 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.SIGNATURE_EXPIRED } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.SIGNATURE_EXPIRED },
+      });
     });
 
     it('rejects with MESSAGE_NOT_YET_VALID when notBefore is in the future', async () => {
       const { nonce } = service.generateNonce(TEST_ADDR);
       const future = new Date(Date.now() + 60_000).toISOString();
-      const { message, signature } = await signedSiwe({ nonce, notBefore: future });
+      const { message, signature } = await signedSiwe({
+        nonce,
+        notBefore: future,
+      });
       await expect(
         service.verifySiweAndConsume({
           action: 'avatar',
@@ -208,7 +245,9 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.MESSAGE_NOT_YET_VALID } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.MESSAGE_NOT_YET_VALID },
+      });
     });
 
     it('rejects with SIGNATURE_EXPIRED when nonce-store TTL has passed', async () => {
@@ -225,7 +264,9 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.SIGNATURE_EXPIRED } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.SIGNATURE_EXPIRED },
+      });
       await mod.close();
     });
   });
@@ -244,20 +285,23 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.INVALID_CHAIN_ID } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.INVALID_CHAIN_ID },
+      });
       await mod.close();
     });
   });
 
   describe('address mismatch', () => {
     it('rejects with ADDRESS_MISMATCH when body.address != recovered signer', async () => {
-      const otherPk = '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
+      const otherPk =
+        '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
       const otherAddr = privateKeyToAccount(otherPk).address;
       const { nonce } = service.generateNonce(otherAddr);
       // Sign a message AS otherPk but claim TEST_ADDR in the request body.
       const { message, signature } = await signedSiwe({
         nonce,
-        privateKey: otherPk as `0x${string}`,
+        privateKey: otherPk,
         address: otherAddr,
       });
       service.generateNonce(TEST_ADDR);
@@ -284,7 +328,9 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.MALFORMED_MESSAGE } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.MALFORMED_MESSAGE },
+      });
     });
   });
 
@@ -339,7 +385,9 @@ describe('AuthService', () => {
           address: TEST_ADDR,
           domain: 'namespace.ninja',
         }),
-      ).rejects.toMatchObject({ response: { code: ErrorCodes.NONCE_NOT_FOUND } });
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.NONCE_NOT_FOUND },
+      });
     });
 
     it('rejects a replay of the same action against an avatar+header nonce', async () => {
@@ -371,14 +419,20 @@ describe('AuthService', () => {
       // a non-matching address and whose checkContractWalletSignature returns true.
       const SAFE_ADDR = '0x000000000000000000000000000000000000c0DE';
       const config: SiweConfig = {
-        verifyMessage: async () => getAddress('0x000000000000000000000000000000000000dEaD'),
+        verifyMessage: () =>
+          Promise.resolve(
+            getAddress('0x000000000000000000000000000000000000dEaD'),
+          ),
         hashMessage: (m) => hashMessage(m),
         getAddress: (a) => getAddress(a),
-        checkContractWalletSignature: async (address, _msg, _sig, _chainId) =>
-          address.toLowerCase() === SAFE_ADDR.toLowerCase(),
+        checkContractWalletSignature: (address: string) =>
+          Promise.resolve(address.toLowerCase() === SAFE_ADDR.toLowerCase()),
       };
       const mod = await buildModule({
-        configs: new Map<number, SiweConfig>([[1, config], [11155111, config]]),
+        configs: new Map<number, SiweConfig>([
+          [1, config],
+          [11155111, config],
+        ]),
       });
       const svc = mod.get(AuthService);
       const { nonce } = svc.generateNonce(SAFE_ADDR, 'avatar+header');

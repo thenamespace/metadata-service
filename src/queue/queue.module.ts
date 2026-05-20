@@ -3,7 +3,7 @@ import { PendingUploadQueueService } from './services';
 
 /**
  * Queue module for managing pending operations across the application.
- * 
+ *
  * @remarks
  * This module provides queue services that can be shared across multiple features.
  * Currently implements an in-memory queue for pending avatar uploads, but can be
@@ -14,4 +14,3 @@ import { PendingUploadQueueService } from './services';
   exports: [PendingUploadQueueService],
 })
 export class QueueModule {}
-

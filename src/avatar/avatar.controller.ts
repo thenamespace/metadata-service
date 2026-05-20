@@ -10,14 +10,28 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { StorageService } from '../storage/storage.service';
 import { EnsService } from '../ens/ens.service';
-import { DeleteRateLimit, UploadRateLimit } from '../rate-limit/rate-limit.decorators';
+import {
+  DeleteRateLimit,
+  UploadRateLimit,
+} from '../rate-limit/rate-limit.decorators';
 import { Logger } from '@nestjs/common';
 import { FileType } from '../common/enums/file-type.enum';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
-import { AvatarUploadResponseDto, DeleteResponseDto, HeaderUploadResponseDto } from './dto/avatar-responses.dto';
+import {
+  AvatarUploadResponseDto,
+  DeleteResponseDto,
+  HeaderUploadResponseDto,
+} from './dto/avatar-responses.dto';
 import { AvatarDeleteDto, HeaderDeleteDto } from './dto/avatar-upload.dto';
 import { AvatarService, UploadResult } from './avatar.service';
 import { AuthService } from '../auth/auth.service';
@@ -40,13 +54,24 @@ type MultipartStreamFile = {
   toBuffer?: () => Promise<Buffer>;
 };
 
-
 interface LocalRequest {
   body?: {
-    avatar?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
-    header?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
-    file?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
-    image?: MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
+    avatar?:
+      | MultipartBufferFile
+      | MultipartStreamFile
+      | (MultipartBufferFile | MultipartStreamFile)[];
+    header?:
+      | MultipartBufferFile
+      | MultipartStreamFile
+      | (MultipartBufferFile | MultipartStreamFile)[];
+    file?:
+      | MultipartBufferFile
+      | MultipartStreamFile
+      | (MultipartBufferFile | MultipartStreamFile)[];
+    image?:
+      | MultipartBufferFile
+      | MultipartStreamFile
+      | (MultipartBufferFile | MultipartStreamFile)[];
     siweMessage?: unknown;
     siweSignature?: unknown;
     address?: unknown;
@@ -68,11 +93,15 @@ export class AvatarController {
     private readonly avatarService: AvatarService,
     private readonly authService: AuthService,
     private readonly queueService: PendingUploadQueueService,
-  ) { }
+  ) {}
 
   private getTextField(value: unknown): string {
     if (typeof value === 'string') return value;
-    if (value && typeof value === 'object' && 'value' in (value as Record<string, unknown>)) {
+    if (
+      value &&
+      typeof value === 'object' &&
+      'value' in (value as Record<string, unknown>)
+    ) {
       const v = (value as Record<string, unknown>).value;
       return typeof v === 'string' ? v : '';
     }
@@ -89,18 +118,19 @@ export class AvatarController {
   @UploadRateLimit()
   @ApiOperation({
     summary: 'Upload or update avatar for a subname',
-    description: `Upload or update an avatar image for an ENS subname with SIWE authentication.`
+    description: `Upload or update an avatar image for an ENS subname with SIWE authentication.`,
   })
   @ApiParam({
     name: 'network',
     enum: Network,
     example: 'mainnet',
-    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+    description:
+      'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)',
   })
   @ApiParam({
     name: 'subname',
     example: 'avatar.offchainsub.eth',
-    description: 'ENS subname (e.g., avatar.offchainsub.eth, alice.eth)'
+    description: 'ENS subname (e.g., avatar.offchainsub.eth, alice.eth)',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -115,21 +145,24 @@ export class AvatarController {
         siweMessage: {
           type: 'string',
           description: 'SIWE message string',
-          example: 'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z'
+          example:
+            'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z',
         },
         siweSignature: {
           type: 'string',
           description: 'Signature for SIWE message',
-          example: '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b'
+          example:
+            '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b',
         },
         address: {
           type: 'string',
           description: 'Wallet address (checks against SIWE)',
-          example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
+          example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a',
         },
         domain: {
           type: 'string',
-          description: 'DNS authority the SIWE message was signed for. Optional during the 1-week grace period.',
+          description:
+            'DNS authority the SIWE message was signed for. Optional during the 1-week grace period.',
           example: 'namespace.ninja',
         },
       },
@@ -137,7 +170,8 @@ export class AvatarController {
     },
   })
   @ApiOkResponse({
-    description: 'Avatar uploaded or updated successfully. Returns immediate confirmation if ENS record exists, or pending status if upload is queued for verification.',
+    description:
+      'Avatar uploaded or updated successfully. Returns immediate confirmation if ENS record exists, or pending status if upload is queued for verification.',
     type: AvatarUploadResponseDto,
     schema: {
       oneOf: [
@@ -162,7 +196,8 @@ export class AvatarController {
             fileSize: 97500,
             isUpdate: false,
             pending: true,
-            message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+            message:
+              'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
           },
         },
       ],
@@ -175,34 +210,56 @@ export class AvatarController {
     @Req() req: unknown,
   ) {
     if (!isValidNetwork(network)) {
-      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        details: { network },
+      });
     }
 
     const r = req as LocalRequest;
-    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
+    const message = this.normalizeMessageNewlines(
+      this.getTextField(r.body?.siweMessage),
+    );
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);
     const domain = this.getTextField(r.body?.domain) || undefined;
     if (!message || !signature || !address) {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature, address, domain });
+    const { address: verifiedAddress } =
+      await this.authService.verifySiweAndConsume({
+        action: 'avatar',
+        message,
+        signature,
+        address,
+        domain,
+      });
 
     // Check if ENS record exists
     const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
 
     if (ensOwner === null) {
       // ENS record doesn't exist - pending upload flow
-      const existingFile = await this.storageService.getFileBuffer(subname, network, FileType.AVATAR);
+      const existingFile = await this.storageService.getFileBuffer(
+        subname,
+        network,
+        FileType.AVATAR,
+      );
       if (existingFile) {
         throw new BadRequestException({
           code: ErrorCodes.PENDING_UPLOAD_EXISTS,
-          message: 'Avatar upload pending verification. Wait 5 minutes or set ENS record first.',
+          message:
+            'Avatar upload pending verification. Wait 5 minutes or set ENS record first.',
         });
       }
 
       // Upload and queue for verification
-      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.AVATAR);
+      const result: UploadResult = await this.avatarService.upload(
+        subname,
+        network,
+        req,
+        FileType.AVATAR,
+      );
       const queueEntry: IPendingUploadEntry = {
         subname,
         network,
@@ -227,7 +284,8 @@ export class AvatarController {
         fileSize: result.fileSize,
         isUpdate: result.isUpdate,
         pending: true,
-        message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+        message:
+          'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
       };
     } else {
       // ENS record exists - verify ownership
@@ -239,7 +297,12 @@ export class AvatarController {
       }
 
       // Proceed with immediate upload
-      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.AVATAR);
+      const result: UploadResult = await this.avatarService.upload(
+        subname,
+        network,
+        req,
+        FileType.AVATAR,
+      );
       return {
         subname,
         network,
@@ -255,18 +318,20 @@ export class AvatarController {
   @DeleteRateLimit()
   @ApiOperation({
     summary: 'Delete avatar for a subname',
-    description: 'Delete the avatar image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP'
+    description:
+      'Delete the avatar image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP',
   })
   @ApiParam({
     name: 'network',
     enum: Network,
     example: 'mainnet',
-    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+    description:
+      'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)',
   })
   @ApiParam({
     name: 'subname',
     example: 'alice.eth',
-    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
+    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)',
   })
   @ApiBody({ type: AvatarDeleteDto })
   @HttpCode(HttpStatus.OK)
@@ -288,14 +353,32 @@ export class AvatarController {
     @Body() dto: AvatarDeleteDto,
   ) {
     if (!isValidNetwork(network)) {
-      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        details: { network },
+      });
     }
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'avatar', message, signature: dto.siweSignature, address: dto.address, domain: dto.domain });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
+    const { address: verifiedAddress } =
+      await this.authService.verifySiweAndConsume({
+        action: 'avatar',
+        message,
+        signature: dto.siweSignature,
+        address: dto.address,
+        domain: dto.domain,
+      });
+    await this.ensService.assertOwnerOrThrow({
+      subname,
+      address: verifiedAddress,
+      network: network,
+    });
 
-    const deleted = await this.avatarService.delete(subname, network, FileType.AVATAR);
+    const deleted = await this.avatarService.delete(
+      subname,
+      network,
+      FileType.AVATAR,
+    );
     this.logger.log({ msg: 'Delete result', network, subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
@@ -313,18 +396,19 @@ export class AvatarController {
   @UploadRateLimit()
   @ApiOperation({
     summary: 'Upload or update header image for a subname',
-    description: `Upload or update a header image for an ENS subname with SIWE authentication.`
+    description: `Upload or update a header image for an ENS subname with SIWE authentication.`,
   })
   @ApiParam({
     name: 'network',
     enum: Network,
     example: 'mainnet',
-    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+    description:
+      'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)',
   })
   @ApiParam({
     name: 'subname',
     example: 'alice.eth',
-    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
+    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -339,21 +423,24 @@ export class AvatarController {
         siweMessage: {
           type: 'string',
           description: 'SIWE message string',
-          example: 'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z'
+          example:
+            'namespace.ninja wants you to sign in with your Ethereum account:\n0x54b06711C8022faf11EC347F2bDc68A91eA03a3a\n\nSign in to Avatar Service (local test)\n\nURI: http://namespace.ninja \nVersion: 1\nChain ID: 1\nNonce: 99ba8946989dcd142a5802257a5a68580dadaa9c86d66416508ef8627f6cc291bb81400991750db4dd11aefc77aaa0ef\nIssued At: 2025-09-16T20:00:33.597Z',
         },
         siweSignature: {
           type: 'string',
           description: 'Signature for SIWE message',
-          example: '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b'
+          example:
+            '0xb6eff78a2f96dfdc01a2cf0555256abca11229e240f44a379cb45eca667566bf4a4d8f2e3eb5dd130ff3b01409e82fe54d00a20e296338ee05c3b040a1f6f8111b',
         },
         address: {
           type: 'string',
           description: 'Wallet address (checks against SIWE)',
-          example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a'
+          example: '0x54b06711C8022faf11EC347F2bDc68A91eA03a3a',
         },
         domain: {
           type: 'string',
-          description: 'DNS authority the SIWE message was signed for. Optional during the 1-week grace period.',
+          description:
+            'DNS authority the SIWE message was signed for. Optional during the 1-week grace period.',
           example: 'namespace.ninja',
         },
       },
@@ -361,7 +448,8 @@ export class AvatarController {
     },
   })
   @ApiOkResponse({
-    description: 'Header uploaded or updated successfully. Returns immediate confirmation if ENS record exists, or pending status if upload is queued for verification.',
+    description:
+      'Header uploaded or updated successfully. Returns immediate confirmation if ENS record exists, or pending status if upload is queued for verification.',
     type: HeaderUploadResponseDto,
     schema: {
       oneOf: [
@@ -386,7 +474,8 @@ export class AvatarController {
             fileSize: 131131,
             isUpdate: false,
             pending: true,
-            message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+            message:
+              'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
           },
         },
       ],
@@ -399,35 +488,63 @@ export class AvatarController {
     @Req() req: unknown,
   ) {
     if (!isValidNetwork(network)) {
-      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        details: { network },
+      });
     }
 
     const r = req as LocalRequest;
-    this.logger.log({ msg: 'Header upload hit', network, subname, hasBody: !!r.body, fields: r.body ? Object.keys(r.body) : [] });
-    const message = this.normalizeMessageNewlines(this.getTextField(r.body?.siweMessage));
+    this.logger.log({
+      msg: 'Header upload hit',
+      network,
+      subname,
+      hasBody: !!r.body,
+      fields: r.body ? Object.keys(r.body) : [],
+    });
+    const message = this.normalizeMessageNewlines(
+      this.getTextField(r.body?.siweMessage),
+    );
     const signature = this.getTextField(r.body?.siweSignature);
     const address = this.getTextField(r.body?.address);
     const domain = this.getTextField(r.body?.domain) || undefined;
     if (!message || !signature || !address) {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature, address, domain });
+    const { address: verifiedAddress } =
+      await this.authService.verifySiweAndConsume({
+        action: 'header',
+        message,
+        signature,
+        address,
+        domain,
+      });
 
     // Check if ENS record exists
     const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
 
     if (ensOwner === null) {
       // ENS record doesn't exist - pending upload flow
-      const existingFile = await this.storageService.getFileBuffer(subname, network, FileType.HEADER);
+      const existingFile = await this.storageService.getFileBuffer(
+        subname,
+        network,
+        FileType.HEADER,
+      );
       if (existingFile) {
         throw new BadRequestException({
           code: ErrorCodes.PENDING_UPLOAD_EXISTS,
-          message: 'Header upload pending verification. Wait 5 minutes or set ENS record first.',
+          message:
+            'Header upload pending verification. Wait 5 minutes or set ENS record first.',
         });
       }
 
       // Upload and queue for verification
-      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.HEADER);
+      const result: UploadResult = await this.avatarService.upload(
+        subname,
+        network,
+        req,
+        FileType.HEADER,
+      );
       const queueEntry: IPendingUploadEntry = {
         subname,
         network,
@@ -452,7 +569,8 @@ export class AvatarController {
         fileSize: result.fileSize,
         isUpdate: result.isUpdate,
         pending: true,
-        message: 'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
+        message:
+          'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
       };
     } else {
       // ENS record exists - verify ownership
@@ -464,7 +582,12 @@ export class AvatarController {
       }
 
       // Proceed with immediate upload
-      const result: UploadResult = await this.avatarService.upload(subname, network, req, FileType.HEADER);
+      const result: UploadResult = await this.avatarService.upload(
+        subname,
+        network,
+        req,
+        FileType.HEADER,
+      );
       return {
         subname,
         network,
@@ -480,18 +603,20 @@ export class AvatarController {
   @DeleteRateLimit()
   @ApiOperation({
     summary: 'Delete header image for a subname',
-    description: 'Delete the header image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP'
+    description:
+      'Delete the header image for an ENS subname. Requires SIWE authentication and ownership verification.\n\n**Rate Limit:** 10 requests/minute per IP',
   })
   @ApiParam({
     name: 'network',
     enum: Network,
     example: 'mainnet',
-    description: 'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)'
+    description:
+      'Ethereum network: mainnet (chain ID 1) or sepolia (chain ID 11155111)',
   })
   @ApiParam({
     name: 'subname',
     example: 'alice.eth',
-    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)'
+    description: 'ENS subname (e.g., alice.eth, bob.namespace.eth)',
   })
   @ApiBody({ type: HeaderDeleteDto })
   @HttpCode(HttpStatus.OK)
@@ -513,14 +638,32 @@ export class AvatarController {
     @Body() dto: HeaderDeleteDto,
   ) {
     if (!isValidNetwork(network)) {
-      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        details: { network },
+      });
     }
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
-    const { address: verifiedAddress } = await this.authService.verifySiweAndConsume({ action: 'header', message, signature: dto.siweSignature, address: dto.address, domain: dto.domain });
-    await this.ensService.assertOwnerOrThrow({ subname, address: verifiedAddress, network: network });
+    const { address: verifiedAddress } =
+      await this.authService.verifySiweAndConsume({
+        action: 'header',
+        message,
+        signature: dto.siweSignature,
+        address: dto.address,
+        domain: dto.domain,
+      });
+    await this.ensService.assertOwnerOrThrow({
+      subname,
+      address: verifiedAddress,
+      network: network,
+    });
 
-    const deleted = await this.avatarService.delete(subname, network, FileType.HEADER);
+    const deleted = await this.avatarService.delete(
+      subname,
+      network,
+      FileType.HEADER,
+    );
     this.logger.log({ msg: 'Header delete result', network, subname, deleted });
     if (!deleted) {
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
@@ -534,5 +677,3 @@ export class AvatarController {
     };
   }
 }
-
-

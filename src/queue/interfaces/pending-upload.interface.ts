@@ -30,12 +30,20 @@ export interface IPendingUploadQueue {
   /**
    * Remove an item from the queue
    */
-  remove(subname: string, network: Network, fileType: FileType): Promise<boolean>;
+  remove(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): Promise<boolean>;
 
   /**
    * Get a specific item from the queue
    */
-  get(subname: string, network: Network, fileType: FileType): Promise<IPendingUploadEntry | null>;
+  get(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): Promise<IPendingUploadEntry | null>;
 
   /**
    * Get all items in the queue (useful for debugging)
@@ -47,4 +55,3 @@ export interface IPendingUploadQueue {
    */
   size(): Promise<number>;
 }
-

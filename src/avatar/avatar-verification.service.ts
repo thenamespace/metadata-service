@@ -11,7 +11,7 @@ import { MIN_WAIT_TIME_MS } from './constants/verification.constants';
 /**
  * Service responsible for verifying pending avatar uploads via cron job.
  * Runs every 5 minutes to check if ENS records have been set for pending uploads.
- * 
+ *
  * @remarks
  * This service ensures that:
  * - Uploads with verified ENS records are confirmed and removed from the queue
@@ -38,7 +38,9 @@ export class AvatarVerificationService {
   async processVerifications(): Promise<void> {
     // Prevent concurrent cron runs
     if (this.isProcessing) {
-      this.logger.warn('Previous verification process still running, skipping this cycle');
+      this.logger.warn(
+        'Previous verification process still running, skipping this cycle',
+      );
       return;
     }
 
@@ -69,7 +71,8 @@ export class AvatarVerificationService {
    */
   private async verifyPendingUploads(): Promise<void> {
     const cutoffTime = new Date(Date.now() - this.minWaitTimeMs);
-    const itemsToProcess = await this.queueService.getItemsOlderThan(cutoffTime);
+    const itemsToProcess =
+      await this.queueService.getItemsOlderThan(cutoffTime);
 
     if (itemsToProcess.length === 0) {
       this.logger.log('No pending uploads to verify');
@@ -120,7 +123,7 @@ export class AvatarVerificationService {
    * Verify a single pending upload item
    * - If ENS record matches uploader address: Remove from queue (success)
    * - If ENS record is null or different: Delete from storage and remove from queue
-   * 
+   *
    * @returns true if the upload was deleted, false if it was verified
    */
   private async verifyItem(item: IPendingUploadEntry): Promise<boolean> {
@@ -138,7 +141,10 @@ export class AvatarVerificationService {
 
     try {
       // Check current ENS record
-      const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
+      const ensOwner = await this.ensService.getOwnerOrNull({
+        subname,
+        network,
+      });
 
       if (ensOwner === null) {
         // No ENS record exists - delete the pending upload
@@ -199,7 +205,11 @@ export class AvatarVerificationService {
   ): Promise<void> {
     try {
       // Delete from storage
-      const deleted = await this.storageService.delete(subname, network, fileType);
+      const deleted = await this.storageService.delete(
+        subname,
+        network,
+        fileType,
+      );
       this.logger.log({
         msg: 'Deleted pending upload from storage',
         subname,
@@ -222,4 +232,3 @@ export class AvatarVerificationService {
     await this.queueService.remove(subname, network, fileType);
   }
 }
-

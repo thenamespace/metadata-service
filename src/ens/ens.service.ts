@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createPublicClient, http } from 'viem';
 import { mainnet, sepolia } from 'viem/chains';
@@ -25,8 +29,11 @@ export class EnsService {
     const sepoliaRpcUrl = this.config.get<string>('ETH_SEPOLIA_RPC_URL');
 
     // Mainnet client
-    const mainnetUrl = mainnetRpcUrl
-      || (alchemyApiKey ? `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}` : undefined);
+    const mainnetUrl =
+      mainnetRpcUrl ||
+      (alchemyApiKey
+        ? `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`
+        : undefined);
 
     this.mainnetClient = createPublicClient({
       chain: mainnet,
@@ -34,8 +41,11 @@ export class EnsService {
     });
 
     // Sepolia client
-    const sepoliaUrl = sepoliaRpcUrl
-      || (alchemyApiKey ? `https://eth-sepolia.g.alchemy.com/v2/${alchemyApiKey}` : undefined);
+    const sepoliaUrl =
+      sepoliaRpcUrl ||
+      (alchemyApiKey
+        ? `https://eth-sepolia.g.alchemy.com/v2/${alchemyApiKey}`
+        : undefined);
 
     this.sepoliaClient = createPublicClient({
       chain: sepolia,
@@ -43,26 +53,42 @@ export class EnsService {
     });
   }
 
-  async assertOwnerOrThrow(params: { subname: string; address: string; network: Network }): Promise<void> {
+  async assertOwnerOrThrow(params: {
+    subname: string;
+    address: string;
+    network: Network;
+  }): Promise<void> {
     const { subname, address, network } = params;
-    
+
     if (!isValidNetwork(network)) {
-      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { network } });
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        details: { network },
+      });
     }
 
     const ens = subname.trim();
     if (!ens) {
-      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { subname } });
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        details: { subname },
+      });
     }
     let normalized: string;
     try {
       normalized = normalize(ens);
     } catch {
-      throw new BadRequestException({ code: ErrorCodes.INVALID_SUBNAME_FORMAT, details: { subname } });
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        details: { subname },
+      });
     }
     const owner = await this.getDefaultAddressRecord(normalized, network);
     if (!owner || owner.toLowerCase() !== address.toLowerCase()) {
-      throw new ForbiddenException({ code: ErrorCodes.NOT_SUBNAME_OWNER, details: { subname, network } });
+      throw new ForbiddenException({
+        code: ErrorCodes.NOT_SUBNAME_OWNER,
+        details: { subname, network },
+      });
     }
   }
 
@@ -71,9 +97,12 @@ export class EnsService {
    * Returns null if the ENS record doesn't exist.
    * Used for checking ENS records before deciding upload flow.
    */
-  async getOwnerOrNull(params: { subname: string; network: Network }): Promise<string | null> {
+  async getOwnerOrNull(params: {
+    subname: string;
+    network: Network;
+  }): Promise<string | null> {
     const { subname, network } = params;
-    
+
     // if (!isValidNetwork(network)) {
     //   return null;
     // }
@@ -93,7 +122,10 @@ export class EnsService {
     return await this.getDefaultAddressRecord(normalized, network);
   }
 
-  private async getDefaultAddressRecord(name: string, network: Network): Promise<string | null> {
+  private async getDefaultAddressRecord(
+    name: string,
+    network: Network,
+  ): Promise<string | null> {
     const key = `${network}:${name.toLowerCase()}`;
     const now = Date.now();
     const cached = this.cache.get(key);
@@ -102,11 +134,10 @@ export class EnsService {
       return cached.owner || null;
     }
 
-    const client = network === Network.MAINNET ? this.mainnetClient : this.sepoliaClient;
+    const client =
+      network === Network.MAINNET ? this.mainnetClient : this.sepoliaClient;
     const owner = await getEnsAddress(client, { name: normalize(name) });
     this.cache.set(key, { owner: owner ?? '', fetchedAt: now });
     return owner;
   }
 }
-
-

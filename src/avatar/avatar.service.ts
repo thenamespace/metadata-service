@@ -20,7 +20,10 @@ type MultipartStreamFile = {
   toBuffer?: () => Promise<Buffer>;
 };
 
-type Uploadable = MultipartBufferFile | MultipartStreamFile | (MultipartBufferFile | MultipartStreamFile)[];
+type Uploadable =
+  | MultipartBufferFile
+  | MultipartStreamFile
+  | (MultipartBufferFile | MultipartStreamFile)[];
 
 interface LocalRequest {
   body?: {
@@ -54,38 +57,85 @@ export class AvatarService {
   private readonly maxAvatarBytes: number;
   private readonly maxHeaderBytes: number;
 
-  constructor(private readonly storageService: StorageService, private readonly configService: ConfigService) {
-    this.maxAvatarBytes = Number(this.configService.get<number>('MAX_AVATAR_BYTES_IN_MB') || 2 * 1024 * 1024);
-    this.maxHeaderBytes = Number(this.configService.get<number>('MAX_HEADER_BYTES_IN_MB') || 5 * 1024 * 1024);
+  constructor(
+    private readonly storageService: StorageService,
+    private readonly configService: ConfigService,
+  ) {
+    this.maxAvatarBytes = Number(
+      this.configService.get<number>('MAX_AVATAR_BYTES_IN_MB') ||
+        2 * 1024 * 1024,
+    );
+    this.maxHeaderBytes = Number(
+      this.configService.get<number>('MAX_HEADER_BYTES_IN_MB') ||
+        5 * 1024 * 1024,
+    );
   }
 
-  async upload(subname: string, network: Network, req: unknown, type: FileType): Promise<UploadResult> {
+  async upload(
+    subname: string,
+    network: Network,
+    req: unknown,
+    type: FileType,
+  ): Promise<UploadResult> {
     const { buffer, mimetype } = await this.extractFileFromRequest(req, type);
     this.validate(buffer, mimetype, type);
 
-    const existingFile = await this.storageService.getFileBuffer(subname, network, type);
+    const existingFile = await this.storageService.getFileBuffer(
+      subname,
+      network,
+      type,
+    );
     const isUpdate = !!existingFile;
 
     await this.storageService.save(subname, network, buffer, type, mimetype);
     const timestamp = isUpdate ? Date.now().toString() : undefined;
-    const url = this.storageService.getPublicUrl(subname, network, type, timestamp);
+    const url = this.storageService.getPublicUrl(
+      subname,
+      network,
+      type,
+      timestamp,
+    );
 
-    this.logger.log({ msg: 'Stored image', subname, network, type, url, isUpdate, size: buffer.length });
-    return { url, uploadedAt: new Date().toISOString(), fileSize: buffer.length, isUpdate };
+    this.logger.log({
+      msg: 'Stored image',
+      subname,
+      network,
+      type,
+      url,
+      isUpdate,
+      size: buffer.length,
+    });
+    return {
+      url,
+      uploadedAt: new Date().toISOString(),
+      fileSize: buffer.length,
+      isUpdate,
+    };
   }
 
-  async delete(subname: string, network: Network, type: FileType): Promise<boolean> {
+  async delete(
+    subname: string,
+    network: Network,
+    type: FileType,
+  ): Promise<boolean> {
     const deleted = await this.storageService.delete(subname, network, type);
     return deleted;
   }
 
-  private async extractFileFromRequest(req: unknown, type: FileType): Promise<{ buffer: Buffer; mimetype: string }> {
+  private async extractFileFromRequest(
+    req: unknown,
+    type: FileType,
+  ): Promise<{ buffer: Buffer; mimetype: string }> {
     const r = req as LocalRequest;
     const preferredField = type === FileType.HEADER ? 'header' : 'avatar';
-    const rawField = r.body?.[preferredField as 'avatar'] ?? r.body?.file ?? r.body?.image;
+    const rawField =
+      r.body?.[preferredField as 'avatar'] ?? r.body?.file ?? r.body?.image;
     const fileField = Array.isArray(rawField) ? rawField[0] : rawField;
     if (!fileField) {
-      throw new BadRequestException({ code: 'MISSING_FILE', details: { field: preferredField } });
+      throw new BadRequestException({
+        code: 'MISSING_FILE',
+        details: { field: preferredField },
+      });
     }
 
     let buffer: Buffer | undefined;
@@ -99,7 +149,10 @@ export class AvatarService {
     }
 
     if (!buffer || !mimetype) {
-      throw new BadRequestException({ code: 'MISSING_FILE', details: { field: preferredField } });
+      throw new BadRequestException({
+        code: 'MISSING_FILE',
+        details: { field: preferredField },
+      });
     }
 
     return { buffer, mimetype };
@@ -114,14 +167,19 @@ export class AvatarService {
       SupportedMimeTypes.SVG,
     ]);
     if (!allowed.has(mimetype)) {
-      throw new BadRequestException({ code: 'UNSUPPORTED_MIME', details: { mimetype } });
+      throw new BadRequestException({
+        code: 'UNSUPPORTED_MIME',
+        details: { mimetype },
+      });
     }
 
-    const maxBytes = type === FileType.HEADER ? this.maxHeaderBytes : this.maxAvatarBytes;
+    const maxBytes =
+      type === FileType.HEADER ? this.maxHeaderBytes : this.maxAvatarBytes;
     if (buffer.length > maxBytes) {
-      throw new BadRequestException({ code: 'FILE_TOO_LARGE', details: { maxBytes, actual: buffer.length, type } });
+      throw new BadRequestException({
+        code: 'FILE_TOO_LARGE',
+        details: { maxBytes, actual: buffer.length, type },
+      });
     }
   }
 }
-
-

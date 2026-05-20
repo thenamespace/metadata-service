@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   ArgumentsHost,
   Catch,
@@ -92,11 +92,23 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
         for (const [key, value] of Object.entries(response)) {
           if (key !== 'message' && key !== 'statusCode' && key !== 'error') {
             // Skip circular references and complex objects
-            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
+            if (
+              typeof value === 'string' ||
+              typeof value === 'number' ||
+              typeof value === 'boolean' ||
+              value === null
+            ) {
               details[key] = value;
             } else if (Array.isArray(value)) {
               // Only include arrays of primitives
-              if (value.every(item => typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean')) {
+              if (
+                value.every(
+                  (item) =>
+                    typeof item === 'string' ||
+                    typeof item === 'number' ||
+                    typeof item === 'boolean',
+                )
+              ) {
                 details[key] = value;
               }
             }
@@ -132,8 +144,8 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     };
   }
 
-  private statusToDefaultCode(status: number): string {
-    switch (status as HttpStatus) {
+  private statusToDefaultCode(status: HttpStatus): string {
+    switch (status) {
       case HttpStatus.BAD_REQUEST:
         return ErrorCodes.BAD_REQUEST;
       case HttpStatus.UNAUTHORIZED:

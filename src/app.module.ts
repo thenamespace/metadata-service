@@ -13,7 +13,7 @@ import { AvatarModule } from './avatar/avatar.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
     ThrottlerModule.forRoot([{ ttl: 60, limit: 100 }]),
     MetadataModule,
     AuthModule,

@@ -13,4 +13,3 @@ export const MIN_WAIT_TIME_MS = 5 * 60 * 1000;
  * @default Every 5 minutes
  */
 export const VERIFICATION_CRON_EXPRESSION = '*/5 * * * *';
-

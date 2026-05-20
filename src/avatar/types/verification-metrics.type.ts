@@ -17,4 +17,3 @@ export enum VerificationResult {
   DELETED_MISMATCH = 'DELETED_MISMATCH',
   ERROR = 'ERROR',
 }
-

@@ -42,7 +42,10 @@ export class AuthController {
     description: 'Nonce generated',
     type: NonceResponseDto,
     schema: {
-      example: { nonce: '5e3239f5a23becc104aa740d93083559a29707119f5f18643a502a2c122b2d8157402df9385b30f1b4cd8f583017ac27' },
+      example: {
+        nonce:
+          '5e3239f5a23becc104aa740d93083559a29707119f5f18643a502a2c122b2d8157402df9385b30f1b4cd8f583017ac27',
+      },
     },
   })
   @HttpCode(HttpStatus.OK)
@@ -50,5 +53,3 @@ export class AuthController {
     return this.authService.generateNonce(dto.address, dto.scope);
   }
 }
-
-

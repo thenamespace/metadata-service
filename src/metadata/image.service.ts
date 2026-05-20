@@ -4,7 +4,7 @@ import {
   CanvasGradient,
   loadImage,
   CanvasRenderingContext2D,
-  registerFont
+  registerFont,
 } from 'canvas';
 import * as path from 'path';
 
@@ -17,27 +17,29 @@ const namespaceLogo = path.resolve(
 );
 const pizzadaoLogo = path.resolve(
   __dirname,
-  "../assets/logo",
-  "pizzadao_logo.jpeg"
-)
+  '../assets/logo',
+  'pizzadao_logo.jpeg',
+);
 
 // These are custom metadata logos for some clients
 // pizzadao, we should make this dynamic in the future
 const customLogos: Record<string, string> = {
-  "pizzadao.eth": pizzadaoLogo,
-  "pizzamafia.eth": pizzadaoLogo,
-  "rarepizzas": pizzadaoLogo,
-}
+  'pizzadao.eth': pizzadaoLogo,
+  'pizzamafia.eth': pizzadaoLogo,
+  rarepizzas: pizzadaoLogo,
+};
 
-const FONT_PATH = path.resolve(__dirname, '../assets/fonts', 'Satoshi-Bold.otf');
+const FONT_PATH = path.resolve(
+  __dirname,
+  '../assets/fonts',
+  'Satoshi-Bold.otf',
+);
 registerFont(FONT_PATH, { family: 'Satoshi' });
 
 interface ImageCache {
   generated: number;
   stream: Buffer;
 }
-
-const MAX_NAME_LEN = 40;
 
 @Injectable()
 export class ImageService {
@@ -85,7 +87,7 @@ export class ImageService {
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 3;
     ctx.shadowBlur = 8;
-    const split = text.split(".");
+    const split = text.split('.');
 
     ctx.fillStyle = 'white';
     ctx.textAlign = 'start';
@@ -98,7 +100,11 @@ export class ImageService {
       const parentName = `${split[split.length - 2]}.${split[split.length - 1]}`;
 
       ctx.font = this.getFontSize() + ' Satoshi';
-      ctx.fillText(`${this.shortenText(subnameLabel, MAX_LABEL_LEN)}.`, 100, 820);
+      ctx.fillText(
+        `${this.shortenText(subnameLabel, MAX_LABEL_LEN)}.`,
+        100,
+        820,
+      );
 
       ctx.globalAlpha = 0.7;
       ctx.font = this.getFontSize() + ' Satoshi';
@@ -112,36 +118,36 @@ export class ImageService {
     ctx.drawImage(ninjaLogoImg, 100, 100, 150, 150);
   };
 
-  private attachCustomLogo = async (fullName: string, ctx: CanvasRenderingContext2D) => {
-
+  private attachCustomLogo = async (
+    fullName: string,
+    ctx: CanvasRenderingContext2D,
+  ) => {
     let parentName = fullName;
-    const split = parentName.split(".");
+    const split = parentName.split('.');
     if (split.length > 2) {
-      parentName = `${split[split.length -2]}.${split[split.length - 1]}`;
+      parentName = `${split[split.length - 2]}.${split[split.length - 1]}`;
     }
 
     if (customLogos[parentName]) {
-
-        try {
-          const customLogoUrl = customLogos[parentName];
-          const customLogo = await loadImage(customLogoUrl);
-          ctx.drawImage(customLogo, 700, 100, 150, 150);
-        } catch(err) {
-          Logger.error("Failed to attach custom logo", err);
-        }
+      try {
+        const customLogoUrl = customLogos[parentName];
+        const customLogo = await loadImage(customLogoUrl);
+        ctx.drawImage(customLogo, 700, 100, 150, 150);
+      } catch (err) {
+        Logger.error('Failed to attach custom logo', err);
+      }
     }
-  }
+  };
 
   private createAvatarBg = async (
     ctx: CanvasRenderingContext2D,
     bgImage: string,
   ) => {
-
     try {
       const img = await loadImage(bgImage);
       ctx.drawImage(img, 0, 0, IMAGE_SIZE, IMAGE_SIZE);
     } catch (err) {
-      Logger.error("Failed to apply avatar to bg", err);
+      Logger.error('Failed to apply avatar to bg', err);
     }
   };
 
@@ -168,15 +174,15 @@ export class ImageService {
     gradient.addColorStop(1, '#44bcf0');
 
     return gradient;
-  }
+  };
 
   private getFontSize = () => {
-    return "105px";
+    return '105px';
   };
 
   private shortenText = (name: string, max_len: number) => {
     if (name.length > max_len) {
-      return name.substring(0, 6) + '...' + name.substring(name.length - 6); 
+      return name.substring(0, 6) + '...' + name.substring(name.length - 6);
     }
 
     return name;
