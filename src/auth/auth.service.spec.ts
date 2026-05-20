@@ -287,4 +287,80 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ response: { code: ErrorCodes.MALFORMED_MESSAGE } });
     });
   });
+
+  describe('scope + consumption', () => {
+    it('rejects using an avatar-only nonce for a header action', async () => {
+      service.generateNonce(TEST_ADDR, 'avatar');
+      const { nonce } = service.generateNonce(TEST_ADDR, 'avatar'); // returns same logic; refetch
+      const { message, signature } = await signedSiwe({ nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'header',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('allows avatar+header dual consumption with one nonce, rejects a third use', async () => {
+      const { nonce } = service.generateNonce(TEST_ADDR, 'avatar+header');
+      const first = await signedSiwe({ nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: first.message,
+          signature: first.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
+
+      // Same nonce, different action.
+      const second = await signedSiwe({ nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'header',
+          message: second.message,
+          signature: second.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
+
+      // Third call: record should be deleted by now.
+      const third = await signedSiwe({ nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: third.message,
+          signature: third.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({ response: { code: ErrorCodes.NONCE_NOT_FOUND } });
+    });
+
+    it('rejects a replay of the same action against an avatar+header nonce', async () => {
+      const { nonce } = service.generateNonce(TEST_ADDR, 'avatar+header');
+      const sample = await signedSiwe({ nonce });
+      await service.verifySiweAndConsume({
+        action: 'avatar',
+        message: sample.message,
+        signature: sample.signature,
+        address: TEST_ADDR,
+        domain: 'namespace.ninja',
+      });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: sample.message,
+          signature: sample.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
 });
