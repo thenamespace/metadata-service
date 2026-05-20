@@ -7,10 +7,10 @@ A standalone NestJS service for generating ENS subname metadata and images, and 
 - Generate JSON metadata for ENS subnames
 - Create dynamic PNG images with custom avatars
 - Upload/delete profile avatar and header images (SIWE-protected)
-- Direct SIWE signature verification for each request, including:
-  - EOA signatures
-  - Smart contract wallet signatures (ERC-4337 / EIP-1271)
-  - Pre-deploy smart account signatures via ERC-6492 using `@ambire/signature-validator`
+- Direct SIWE v4 signature verification for each request, including:
+  - EOA signatures (ecrecover, fully offline)
+  - Smart contract wallet signatures (EIP-1271) via viem
+  - Counterfactual smart-account signatures (EIP-6492) via viem
 - RESTful API with Swagger documentation
 - Docker support for easy deployment
 - Health check endpoints
@@ -115,19 +115,19 @@ http://localhost:3000/openapi.json
 
 - `POST /profile/{network}/{subname}/avatar` - Upload or update avatar image for a subname
   - Auth: SIWE signature verification (no JWT required)
-  - Content-Type: `multipart/form-data` with fields: `avatar`, `siweMessage`, `siweSignature`, `address`
+  - Content-Type: `multipart/form-data` with fields: `avatar`, `siweMessage`, `siweSignature`, `address`, `domain`
   - Response: `{ subname, network, avatarUrl, uploadedAt, fileSize, isUpdate }`
 - `DELETE /profile/{network}/{subname}/avatar` - Delete avatar image for a subname
   - Auth: SIWE signature verification (no JWT required)
-  - Body: `{ "siweMessage": string, "siweSignature": string, "address": string }`
+  - Body: `{ "siweMessage": string, "siweSignature": string, "address": string, "domain": string }`
   - Response: `{ subname, network, message, deletedAt }`
 - `POST /profile/{network}/{subname}/header` - Upload or update header image for a subname
   - Auth: SIWE signature verification (no JWT required)
-  - Content-Type: `multipart/form-data` with fields: `header`, `siweMessage`, `siweSignature`, `address`
+  - Content-Type: `multipart/form-data` with fields: `header`, `siweMessage`, `siweSignature`, `address`, `domain`
   - Response: `{ subname, network, headerUrl, uploadedAt, fileSize, isUpdate }`
 - `DELETE /profile/{network}/{subname}/header` - Delete header image for a subname
   - Auth: SIWE signature verification (no JWT required)
-  - Body: `{ "siweMessage": string, "siweSignature": string, "address": string }`
+  - Body: `{ "siweMessage": string, "siweSignature": string, "address": string, "domain": string }`
   - Response: `{ subname, network, message, deletedAt }`
 
 **Supported Networks:**
@@ -206,16 +206,15 @@ The service generates dynamic PNG images with:
 - `@nestjs/common`, `@nestjs/core`, `@nestjs/platform-fastify` - NestJS framework
 - `@nestjs/config` - Configuration management
 - `@nestjs/swagger` - API documentation
-- `siwe` - Sign-In With Ethereum verification
+- `@signinwithethereum/siwe` - Sign-In With Ethereum v4 verification
 - `@nestjs/throttler` - Rate limiting
 - `canvas` - Image generation
 - `axios` - HTTP client
 - `@google-cloud/storage` - GCS backend
-- `viem` - Ethereum utilities
+- `viem` - Ethereum utilities and EIP-1271/6492 signature verification
 - `sharp` - Image processing
 - `@fastify/multipart` - Multipart form handling
 - `@fastify/static` - Static file serving
-- `@ambire/signature-validator` - ERC-6492 and smart wallet signature validation
 
 ### Development Dependencies
 
@@ -293,23 +292,64 @@ This service was extracted from the main indexer project. Key changes:
 3. **Standalone Deployment**: Can be deployed independently
 4. **API Compatibility**: Metadata endpoints remain compatible; new SIWE-based auth/profile endpoints added
 
-## Authentication Flow
+## Auth & SIWE verification
 
-The service uses a simplified SIWE (Sign-In With Ethereum) authentication flow with full support for both EOA (Externally Owned Accounts) and smart contract wallets (ERC-4337/EIP-1271). It also supports ERC-6492 for validating signatures from smart accounts that are not yet deployed:
+The service authenticates avatar/header upload + delete requests using
+[EIP-4361 Sign-In with Ethereum](https://eips.ethereum.org/EIPS/eip-4361)
+via the [`@signinwithethereum/siwe`](https://www.npmjs.com/package/@signinwithethereum/siwe)
+library (v4). Both EOA and smart-account wallets (EIP-1271, including EIP-6492
+counterfactual) are supported natively through viem — no Ambire dependency.
 
-1. **Nonce Generation**: Client requests a nonce for their Ethereum address via `POST /auth/nonce`
-2. **SIWE Message**: Client creates a SIWE message using the nonce and signs it with their wallet
-3. **Direct Verification**: For each protected operation, the client includes the SIWE message, signature, and address
-4. **ENS Ownership**: The service verifies the client owns the ENS subname they're trying to modify
+### Flow
 
-This approach eliminates the need for JWT tokens and provides a more direct, stateless authentication mechanism.
+1. Client `POST /auth/nonce { address, scope }` → `{ nonce, expiresAt }`.
+   `scope` is `"avatar"`, `"header"`, or `"avatar+header"` (default).
+2. Client signs a SIWE message containing that nonce + the app's domain.
+3. Client `POST` an avatar/header upload (multipart) or delete (JSON) with
+   `siweMessage`, `siweSignature`, `address`, and **`domain`**.
+4. Server asserts `domain === message.domain`, verifies the signature via v4
+   (EOA recovery or EIP-1271/6492 RPC), checks chain allowlist + nonce TTL,
+   flips the matching `used.<action>` flag, and on full consumption deletes
+   the nonce record.
 
-### Wallet Type Support
+### `domain` — caller-asserted, no allowlist
 
-- **EOA Wallets** (MetaMask, Rainbow, etc.): Standard ECDSA signature verification using `ecrecover`
-- **Smart Contract Wallets** (ERC-4337 accounts, Safe, etc.)
+The `domain` field is the DNS authority the SIWE message was signed for
+(e.g. `app.example.com`, `localhost`). The server only checks that it equals
+the `domain` line inside the SIWE message — it does **not** restrict which
+domains are allowed. The service remains open: any app on any domain can
+integrate without server-side enrolment.
 
-The service automatically detects the wallet type and uses the appropriate verification method. Smart contract wallet signatures can be variable length and contain additional metadata, which is fully supported. For smart accounts that are not yet deployed, ERC-6492 signatures are validated using `@ambire/signature-validator`.
+### Grace period (T+0 → T+7 days)
+
+After this version deploys, requests without `domain` are accepted with a
+deprecation log; the server falls back to using the SIWE message's own domain
+(binding becomes a no-op for that call). After 7 days, a follow-up PR sets
+`SIWE_DOMAIN_REQUIRED=true` and rejects `MISSING_DOMAIN`. Update your
+avatar SDK / ui-kit consumers before that window closes.
+
+### Error codes
+
+| Code | Meaning |
+|---|---|
+| `NONCE_NOT_FOUND` | No nonce for this address (or already consumed). |
+| `NONCE_MISMATCH` | SIWE message embeds a nonce different from the stored one. |
+| `DOMAIN_MISMATCH` | Caller `domain` ≠ `message.domain`. |
+| `MISSING_DOMAIN` | Post-grace; caller omitted `domain`. |
+| `MALFORMED_MESSAGE` | SIWE message could not be parsed. |
+| `MESSAGE_NOT_YET_VALID` | `notBefore` is in the future. |
+| `SIGNATURE_EXPIRED` | `expirationTime` is in the past, or nonce TTL elapsed. |
+| `ADDRESS_MISMATCH` | Recovered signer ≠ `address` in the request body. |
+| `INVALID_CHAIN_ID` | `chainId` not in `SIWE_ALLOWED_CHAIN_IDS`. |
+| `SIGNATURE_VERIFICATION_FAILED` | Catch-all (EOA recovery failed, EIP-1271 returned false, etc.). |
+| `UNAUTHORIZED` | Scope conflict or double-consumption of the same `used.<action>` flag. |
+
+### Smart-account RPC dependency
+
+EOA verification works fully offline (ecrecover). EIP-1271 (deployed) and
+EIP-6492 (counterfactual) verification each issue one Alchemy RPC call.
+If Alchemy is down, EOA users authenticate normally; smart-account users
+get `SIGNATURE_VERIFICATION_FAILED`.
 
 ## Contributing
 
