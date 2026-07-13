@@ -8,11 +8,6 @@ import { AuthService } from './auth.service';
 import { SIWE_CONFIGS, SiweConfigsByChain } from './siwe.config';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 
-/**
- * A tiny EOA-only SiweConfig that uses viem's recoverAddress over a hashed message.
- * Smart-contract paths are exercised by overriding checkContractWalletSignature in
- * specific tests.
- */
 function eoaOnlyConfig(): SiweConfig {
   return {
     verifyMessage: async (message: string, signature: string) => {
@@ -28,10 +23,7 @@ function eoaOnlyConfig(): SiweConfig {
 }
 
 function buildModule(
-  opts: {
-    env?: Record<string, string>;
-    configs?: SiweConfigsByChain;
-  } = {},
+  opts: { env?: Record<string, string>; configs?: SiweConfigsByChain } = {},
 ) {
   const env: Record<string, string> = {
     ALCHEMY_API_KEY: 'test',
@@ -39,7 +31,7 @@ function buildModule(
     SIWE_NONCE_TTL_MS: '300000',
     ...(opts.env ?? {}),
   };
-  const configs: SiweConfigsByChain =
+  const configs =
     opts.configs ??
     new Map<number, SiweConfig>([
       [1, eoaOnlyConfig()],
@@ -57,6 +49,9 @@ function buildModule(
 const TEST_PK =
   '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
 const TEST_ADDR = privateKeyToAccount(TEST_PK).address;
+const TEST_PK2 =
+  '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
+const TEST_ADDR2 = privateKeyToAccount(TEST_PK2).address;
 
 async function signedSiwe(opts: {
   address?: string;
@@ -93,9 +88,9 @@ describe('AuthService', () => {
     module = await buildModule();
     service = module.get(AuthService);
   });
-
   afterEach(async () => {
     await module.close();
+    jest.restoreAllMocks();
   });
 
   describe('EOA happy path with domain', () => {
@@ -173,7 +168,29 @@ describe('AuthService', () => {
   });
 
   describe('nonce branches', () => {
-    it('rejects with NONCE_NOT_FOUND when no nonce was generated', async () => {
+    it('draws independent entropy for distinct addresses', () => {
+      const entropyBytes = [0, 255];
+      const getRandomValues = jest
+        .spyOn(globalThis.crypto, 'getRandomValues')
+        .mockImplementation((array) => {
+          const bytes = new Uint8Array(
+            array.buffer,
+            array.byteOffset,
+            array.byteLength,
+          );
+          bytes.fill(entropyBytes.shift() as number);
+          return array;
+        });
+      const first = service.generateNonce(TEST_ADDR).nonce;
+      const second = service.generateNonce(TEST_ADDR2).nonce;
+      expect(getRandomValues).toHaveBeenCalledTimes(2);
+      expect(first).toMatch(/^[A-Za-z0-9]{17}$/);
+      expect(second).toMatch(/^[A-Za-z0-9]{17}$/);
+      expect(first).not.toBe(second);
+      expect(second.slice(0, -1)).not.toBe(first.slice(1));
+    });
+
+    it('rejects with NONCE_NOT_FOUND when no nonce for address', async () => {
       const { message, signature } = await signedSiwe({
         nonce: 'abcdefghij1234567890',
       });
@@ -190,7 +207,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('rejects with NONCE_MISMATCH when message nonce differs from stored', async () => {
+    it('rejects with NONCE_MISMATCH when address has records but nonce absent', async () => {
       service.generateNonce(TEST_ADDR);
       const { message, signature } = await signedSiwe({
         nonce: 'WRONGnonce1234567890abc',
@@ -210,7 +227,7 @@ describe('AuthService', () => {
   });
 
   describe('time branches', () => {
-    it('rejects with SIGNATURE_EXPIRED when expirationTime is in the past', async () => {
+    it('rejects with SIGNATURE_EXPIRED when expirationTime past', async () => {
       const { nonce } = service.generateNonce(TEST_ADDR);
       const past = new Date(Date.now() - 60_000).toISOString();
       const { message, signature } = await signedSiwe({
@@ -230,7 +247,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('rejects with MESSAGE_NOT_YET_VALID when notBefore is in the future', async () => {
+    it('rejects with MESSAGE_NOT_YET_VALID when notBefore future', async () => {
       const { nonce } = service.generateNonce(TEST_ADDR);
       const future = new Date(Date.now() + 60_000).toISOString();
       const { message, signature } = await signedSiwe({
@@ -272,7 +289,7 @@ describe('AuthService', () => {
   });
 
   describe('chain branches', () => {
-    it('rejects with INVALID_CHAIN_ID when chainId not in SIWE_ALLOWED_CHAIN_IDS', async () => {
+    it('rejects with INVALID_CHAIN_ID when chainId not allowed', async () => {
       const mod = await buildModule({ env: { SIWE_ALLOWED_CHAIN_IDS: '1' } });
       const svc = mod.get(AuthService);
       const { nonce } = svc.generateNonce(TEST_ADDR);
@@ -294,14 +311,11 @@ describe('AuthService', () => {
 
   describe('address mismatch', () => {
     it('rejects with ADDRESS_MISMATCH when body.address != recovered signer', async () => {
-      const otherPk =
-        '0x4f3edf983ac636a65a842ce7c78d9aa706d3b113bce9c46f30d7d21715b23b1d';
-      const otherAddr = privateKeyToAccount(otherPk).address;
+      const otherAddr = TEST_ADDR2;
       const { nonce } = service.generateNonce(otherAddr);
-      // Sign a message AS otherPk but claim TEST_ADDR in the request body.
       const { message, signature } = await signedSiwe({
         nonce,
-        privateKey: otherPk,
+        privateKey: TEST_PK2,
         address: otherAddr,
       });
       service.generateNonce(TEST_ADDR);
@@ -318,7 +332,7 @@ describe('AuthService', () => {
   });
 
   describe('malformed message', () => {
-    it('rejects with MALFORMED_MESSAGE when the message is unparseable', async () => {
+    it('rejects with MALFORMED_MESSAGE when message unparseable', async () => {
       service.generateNonce(TEST_ADDR);
       await expect(
         service.verifySiweAndConsume({
@@ -336,8 +350,7 @@ describe('AuthService', () => {
 
   describe('scope + consumption', () => {
     it('rejects using an avatar-only nonce for a header action', async () => {
-      service.generateNonce(TEST_ADDR, 'avatar');
-      const { nonce } = service.generateNonce(TEST_ADDR, 'avatar'); // returns same logic; refetch
+      const { nonce } = service.generateNonce(TEST_ADDR, 'avatar');
       const { message, signature } = await signedSiwe({ nonce });
       await expect(
         service.verifySiweAndConsume({
@@ -350,7 +363,7 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
-    it('allows avatar+header dual consumption with one nonce, rejects a third use', async () => {
+    it('allows avatar+header dual consumption, rejects third use', async () => {
       const { nonce } = service.generateNonce(TEST_ADDR, 'avatar+header');
       const first = await signedSiwe({ nonce });
       await expect(
@@ -362,8 +375,6 @@ describe('AuthService', () => {
           domain: 'namespace.ninja',
         }),
       ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
-
-      // Same nonce, different action.
       const second = await signedSiwe({ nonce });
       await expect(
         service.verifySiweAndConsume({
@@ -374,8 +385,6 @@ describe('AuthService', () => {
           domain: 'namespace.ninja',
         }),
       ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
-
-      // Third call: record should be deleted by now.
       const third = await signedSiwe({ nonce });
       await expect(
         service.verifySiweAndConsume({
@@ -390,7 +399,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('rejects a replay of the same action against an avatar+header nonce', async () => {
+    it('rejects replay of same action against avatar+header nonce', async () => {
       const { nonce } = service.generateNonce(TEST_ADDR, 'avatar+header');
       const sample = await signedSiwe({ nonce });
       await service.verifySiweAndConsume({
@@ -413,10 +422,7 @@ describe('AuthService', () => {
   });
 
   describe('EIP-1271 smart contract wallet', () => {
-    it('verifies via checkContractWalletSignature when EOA recovery does not match', async () => {
-      // A contract wallet "owns" SAFE_ADDR but the underlying signer is TEST_ADDR.
-      // To force the contract path, we use a config whose verifyMessage returns
-      // a non-matching address and whose checkContractWalletSignature returns true.
+    it('verifies via checkContractWalletSignature when EOA recovery mismatches', async () => {
       const SAFE_ADDR = '0x000000000000000000000000000000000000c0DE';
       const config: SiweConfig = {
         verifyMessage: () =>
@@ -436,7 +442,6 @@ describe('AuthService', () => {
       });
       const svc = mod.get(AuthService);
       const { nonce } = svc.generateNonce(SAFE_ADDR, 'avatar+header');
-      // The message must claim SAFE_ADDR; the (fake) signature can be anything 130+ hex.
       const message = new SiweMessage({
         domain: 'namespace.ninja',
         address: SAFE_ADDR,
@@ -457,6 +462,242 @@ describe('AuthService', () => {
       });
       expect(result.address).toBe(SAFE_ADDR.toLowerCase());
       await mod.close();
+    });
+  });
+
+  // ===== MULTI-PENDING-NONCE TESTS =====
+
+  describe('multi-pending-nonce: idempotency', () => {
+    it('(1) same address + same scope returns same nonce (idempotent)', () => {
+      const first = service.generateNonce(TEST_ADDR, 'avatar');
+      const second = service.generateNonce(TEST_ADDR, 'avatar');
+      expect(second.nonce).toBe(first.nonce);
+      expect(second.expiresAt).toBe(first.expiresAt);
+    });
+    it('same address + different scope returns distinct nonce', () => {
+      const a = service.generateNonce(TEST_ADDR, 'avatar');
+      const h = service.generateNonce(TEST_ADDR, 'header');
+      expect(h.nonce).not.toBe(a.nonce);
+    });
+  });
+
+  describe('multi-pending-nonce: non-invalidation', () => {
+    it('(2) different scope does not invalidate original signed nonce', async () => {
+      const avatarNonce = service.generateNonce(TEST_ADDR, 'avatar');
+      const headerNonce = service.generateNonce(TEST_ADDR, 'header');
+      expect(headerNonce.nonce).not.toBe(avatarNonce.nonce);
+      const { message, signature } = await signedSiwe({
+        nonce: avatarNonce.nonce,
+      });
+      const result = await service.verifySiweAndConsume({
+        action: 'avatar',
+        message,
+        signature,
+        address: TEST_ADDR,
+        domain: 'namespace.ninja',
+      });
+      expect(result).toEqual({ address: TEST_ADDR.toLowerCase() });
+    });
+  });
+
+  describe('multi-pending-nonce: scope enforcement', () => {
+    it('(3) each scope nonce enforces its own scope', async () => {
+      const avatarNonce = service.generateNonce(TEST_ADDR, 'avatar');
+      const headerNonce = service.generateNonce(TEST_ADDR, 'header');
+      const hMsg = await signedSiwe({ nonce: headerNonce.nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: hMsg.message,
+          signature: hMsg.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      const aMsg = await signedSiwe({ nonce: avatarNonce.nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: aMsg.message,
+          signature: aMsg.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
+    });
+  });
+
+  describe('multi-pending-nonce: independent consumption', () => {
+    it('(4) consuming one nonce leaves other pending nonces usable', async () => {
+      const aN = service.generateNonce(TEST_ADDR, 'avatar');
+      const hN = service.generateNonce(TEST_ADDR, 'header');
+      const aMsg = await signedSiwe({ nonce: aN.nonce });
+      await service.verifySiweAndConsume({
+        action: 'avatar',
+        message: aMsg.message,
+        signature: aMsg.signature,
+        address: TEST_ADDR,
+        domain: 'namespace.ninja',
+      });
+      const hMsg = await signedSiwe({ nonce: hN.nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'header',
+          message: hMsg.message,
+          signature: hMsg.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
+    });
+    it('after consuming both scopes, address has no records', async () => {
+      const aN = service.generateNonce(TEST_ADDR, 'avatar');
+      const hN = service.generateNonce(TEST_ADDR, 'header');
+      const aMsg = await signedSiwe({ nonce: aN.nonce });
+      await service.verifySiweAndConsume({
+        action: 'avatar',
+        message: aMsg.message,
+        signature: aMsg.signature,
+        address: TEST_ADDR,
+        domain: 'namespace.ninja',
+      });
+      const hMsg = await signedSiwe({ nonce: hN.nonce });
+      await service.verifySiweAndConsume({
+        action: 'header',
+        message: hMsg.message,
+        signature: hMsg.signature,
+        address: TEST_ADDR,
+        domain: 'namespace.ninja',
+      });
+      const { message, signature } = await signedSiwe({ nonce: aN.nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.NONCE_NOT_FOUND },
+      });
+    });
+  });
+
+  describe('multi-pending-nonce: expiry pruning', () => {
+    it('(5) expired records pruned; fresh nonce for same scope', async () => {
+      const mod = await buildModule({ env: { SIWE_NONCE_TTL_MS: '1' } });
+      const svc = mod.get(AuthService);
+      const old = svc.generateNonce(TEST_ADDR, 'avatar');
+      await new Promise((r) => setTimeout(r, 10));
+      const fresh = svc.generateNonce(TEST_ADDR, 'avatar');
+      expect(fresh.nonce).not.toBe(old.nonce);
+      await mod.close();
+    });
+    it('pruning expired does not affect unexpired for other scopes', async () => {
+      const mod = await buildModule({ env: { SIWE_NONCE_TTL_MS: '50' } });
+      const svc = mod.get(AuthService);
+      const hN = svc.generateNonce(TEST_ADDR, 'header');
+      await new Promise((r) => setTimeout(r, 10));
+      svc.generateNonce(TEST_ADDR, 'avatar');
+      const hMsg = await signedSiwe({ nonce: hN.nonce });
+      await expect(
+        svc.verifySiweAndConsume({
+          action: 'header',
+          message: hMsg.message,
+          signature: hMsg.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
+      await mod.close();
+    });
+  });
+
+  describe('multi-pending-nonce: storage cap', () => {
+    it('(6) at cap, idempotent return for existing scopes (no leak)', () => {
+      const f1 = service.generateNonce(TEST_ADDR, 'avatar');
+      const f2 = service.generateNonce(TEST_ADDR, 'header');
+      const f3 = service.generateNonce(TEST_ADDR, 'avatar+header');
+      expect(f1.nonce).not.toBe(f2.nonce);
+      expect(f2.nonce).not.toBe(f3.nonce);
+      expect(f1.nonce).not.toBe(f3.nonce);
+      const again = service.generateNonce(TEST_ADDR, 'avatar');
+      expect(again.nonce).toBe(f1.nonce);
+    });
+  });
+
+  describe('multi-pending-nonce: NONCE_NOT_FOUND vs NONCE_MISMATCH', () => {
+    it('NONCE_NOT_FOUND when address has zero pending records', async () => {
+      const { message, signature } = await signedSiwe({
+        nonce: 'any1234567890abc',
+      });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.NONCE_NOT_FOUND },
+      });
+    });
+    it('NONCE_MISMATCH when address has records but nonce absent', async () => {
+      service.generateNonce(TEST_ADDR, 'avatar');
+      const { message, signature } = await signedSiwe({
+        nonce: 'noSuch9876543210',
+      });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message,
+          signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.NONCE_MISMATCH },
+      });
+    });
+  });
+
+  describe('multi-pending-nonce: avatar+header dual consumption', () => {
+    it('avatar+header scope allows both actions, then NONCE_NOT_FOUND', async () => {
+      const { nonce } = service.generateNonce(TEST_ADDR, 'avatar+header');
+      const aMsg = await signedSiwe({ nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: aMsg.message,
+          signature: aMsg.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
+      const hMsg = await signedSiwe({ nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'header',
+          message: hMsg.message,
+          signature: hMsg.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).resolves.toEqual({ address: TEST_ADDR.toLowerCase() });
+      const third = await signedSiwe({ nonce });
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          message: third.message,
+          signature: third.signature,
+          address: TEST_ADDR,
+          domain: 'namespace.ninja',
+        }),
+      ).rejects.toMatchObject({
+        response: { code: ErrorCodes.NONCE_NOT_FOUND },
+      });
     });
   });
 });
