@@ -1,4 +1,12 @@
-import { IsEthereumAddress, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import {
+  IsEthereumAddress,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 /**
  * Request body for generating a SIWE nonce.
@@ -26,8 +34,9 @@ export class VerifySignatureDto {
 
   @IsString()
   @IsNotEmpty()
-  @Matches(/^0x[a-fA-F0-9]{130,}$/, { 
-    message: 'Invalid signature format - must be at least 130 hex characters (65 bytes) for EOA signatures, or longer for smart contract signatures' 
+  @Matches(/^0x(?:[a-fA-F0-9]{2})+$/, {
+    message:
+      'Invalid signature format - must be a non-empty, even-length hex value',
   })
   signature!: string;
 
@@ -36,5 +45,3 @@ export class VerifySignatureDto {
   @IsEthereumAddress()
   address!: string;
 }
-
-
