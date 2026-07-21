@@ -182,6 +182,59 @@ describe('AuthService', () => {
       expect(second).toEqual(first);
     });
 
+    it('returns a fresh verifiable nonce after a single-scope nonce is consumed', async () => {
+      const first = service.generateNonce(TEST_ACCOUNT.address, 'avatar');
+      const firstSigned = await signSiweMessage({ nonce: first.nonce });
+
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          address: TEST_ACCOUNT.address,
+          expectedChainId: 1,
+          ...firstSigned,
+        }),
+      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+
+      const replacement = service.generateNonce(TEST_ACCOUNT.address, 'avatar');
+      const replacementSigned = await signSiweMessage({
+        nonce: replacement.nonce,
+      });
+
+      expect(replacement.nonce).not.toBe(first.nonce);
+      await expect(
+        service.verifySiweAndConsume({
+          action: 'avatar',
+          address: TEST_ACCOUNT.address,
+          expectedChainId: 1,
+          ...replacementSigned,
+        }),
+      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+    });
+
+    it('replaces an expired same-scope nonce with a fresh nonce', async () => {
+      const shortLivedModule = await createModule({
+        env: { SIWE_NONCE_TTL_MS: '1000' },
+      });
+      const shortLivedService = shortLivedModule.get(AuthService);
+      const issuedAt = Date.now();
+      const now = jest.spyOn(Date, 'now').mockReturnValue(issuedAt);
+      const first = shortLivedService.generateNonce(
+        TEST_ACCOUNT.address,
+        'header',
+      );
+
+      now.mockReturnValue(issuedAt + 1001);
+      const replacement = shortLivedService.generateNonce(
+        TEST_ACCOUNT.address,
+        'header',
+      );
+
+      expect(replacement.nonce).not.toBe(first.nonce);
+      expect(replacement.expiresAt).toBe(issuedAt + 2001);
+
+      await shortLivedModule.close();
+    });
+
     it('keeps different scoped nonces for one address independently verifiable', async () => {
       const avatarNonce = service.generateNonce(TEST_ACCOUNT.address, 'avatar');
       const headerNonce = service.generateNonce(TEST_ACCOUNT.address, 'header');
@@ -394,19 +447,25 @@ describe('AuthService', () => {
   });
 
   describe('scope and replay protection', () => {
-    it('rejects using an avatar-only nonce for a header action', async () => {
-      const { nonce } = service.generateNonce(TEST_ACCOUNT.address, 'avatar');
-      const signed = await signSiweMessage({ nonce });
+    it.each([
+      { scope: 'avatar' as const, action: 'header' as const },
+      { scope: 'header' as const, action: 'avatar' as const },
+    ])(
+      'rejects using a $scope-only nonce for a $action action',
+      async ({ scope, action }) => {
+        const { nonce } = service.generateNonce(TEST_ACCOUNT.address, scope);
+        const signed = await signSiweMessage({ nonce });
 
-      await expect(
-        service.verifySiweAndConsume({
-          action: 'header',
-          address: TEST_ACCOUNT.address,
-          expectedChainId: 1,
-          ...signed,
-        }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-    });
+        await expect(
+          service.verifySiweAndConsume({
+            action,
+            address: TEST_ACCOUNT.address,
+            expectedChainId: 1,
+            ...signed,
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      },
+    );
 
     it('rejects replaying the same action with an avatar+header nonce', async () => {
       const { nonce } = service.generateNonce(
