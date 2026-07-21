@@ -376,7 +376,7 @@ export class AvatarController {
           example: {
             subname: 'alice.eth',
             network: 'mainnet',
-            headerUrl: 'https://avtr.cc/alice.eth/header',
+            headerUrl: 'https://avtr.cc/alice.eth/h',
             uploadedAt: '2025-10-24T10:30:00.000Z',
             fileSize: 131131,
             isUpdate: false,
@@ -387,7 +387,7 @@ export class AvatarController {
           example: {
             subname: 'alice.eth',
             network: 'mainnet',
-            headerUrl: 'https://avtr.cc/alice.eth/header',
+            headerUrl: 'https://avtr.cc/alice.eth/h',
             uploadedAt: '2025-10-24T10:30:00.000Z',
             fileSize: 131131,
             isUpdate: false,
