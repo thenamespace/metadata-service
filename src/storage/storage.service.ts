@@ -67,8 +67,7 @@ export class StorageService {
    * Build a public URL for the stored file; adds a cache-busting timestamp on updates.
    */
   getPublicUrl(subname: string, network: Network, type: FileType = FileType.AVATAR, timestamp?: string): string {
-    const networkPath = getNetworkPath(network);
-    const basePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
+    const basePath = this.getFilePath(subname, network, type);
     const baseUrl = `https://${this.bucketName}/${basePath}`;
     return timestamp ? `${baseUrl}?timestamp=${timestamp}` : baseUrl;
   }
@@ -77,8 +76,7 @@ export class StorageService {
    * Save a file to the configured storage backend with content type metadata.
    */
   async save(subname: string, network: Network, buffer: Buffer, type: FileType = FileType.AVATAR, contentType: string): Promise<void> {
-    const networkPath = getNetworkPath(network);
-    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
+    const filePath = this.getFilePath(subname, network, type);
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
@@ -98,8 +96,7 @@ export class StorageService {
    * Delete a stored file; returns true if deleted or existed, false if missing.
    */
   async delete(subname: string, network: Network, type: FileType = FileType.AVATAR): Promise<boolean> {
-    const networkPath = getNetworkPath(network);
-    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
+    const filePath = this.getFilePath(subname, network, type);
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
@@ -116,8 +113,7 @@ export class StorageService {
    * Download a stored file and return its buffer and content type if present.
    */
   async getFileBuffer(subname: string, network: Network, type: FileType): Promise<{ buffer: Buffer; contentType: string } | null> {
-    const networkPath = getNetworkPath(network);
-    const filePath = type === FileType.HEADER ? `${networkPath}${subname}/header` : `${networkPath}${subname}`;
+    const filePath = this.getFilePath(subname, network, type);
     
     if (!this.storage) {
       throw new Error('GCS storage not initialized');
@@ -136,6 +132,17 @@ export class StorageService {
       this.logger.error(`Failed to download file from GCS: ${filePath}, error: ${error}`);
       return null;
     }
+  }
+
+  private getFilePath(
+    subname: string,
+    network: Network,
+    type: FileType,
+  ): string {
+    const networkPath = getNetworkPath(network);
+    return type === FileType.HEADER
+      ? `${networkPath}${subname}/h`
+      : `${networkPath}${subname}`;
   }
 
   private detectContentType(buffer: Buffer): string {

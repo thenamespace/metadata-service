@@ -1,11 +1,20 @@
-import { Injectable, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SiweMessage } from 'siwe';
-import { createPublicClient, http, PublicClient } from 'viem';
-import { mainnet, sepolia } from 'viem/chains';
-import { verifyMessage as ambireVerifyMessage } from '@ambire/signature-validator';
-import { generateSiweNonce } from 'viem/siwe';
+import {
+  generateNonce,
+  SiweError,
+  SiweErrorType,
+  SiweMessage,
+  SiweResponse,
+} from '@signinwithethereum/siwe';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
+import { SIWE_CONFIGS, SiweConfigMap } from './siwe.config';
 
 type Scope = 'avatar' | 'header' | 'avatar+header';
 type Action = 'avatar' | 'header';
@@ -22,207 +31,321 @@ interface VerificationParams {
   action: Action;
   message: string;
   signature: string;
-  address: string;
+  address?: string;
+  expectedChainId: 1 | 11155111;
 }
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private addressToNonce: Map<string, NonceRecord> = new Map();
-  private readonly mainnetClient: PublicClient;
-  private readonly sepoliaClient: PublicClient;
+  private readonly addressToNonces = new Map<string, Map<Scope, NonceRecord>>();
 
-  constructor(private readonly configService: ConfigService) {
-    const alchemyApiKey = this.configService.get<string>('ALCHEMY_API_KEY');
-    
-    if (!alchemyApiKey) {
-      throw new Error('ALCHEMY_API_KEY environment variable is required');
-    }
-
-    const mainnetUrl = `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`;
-    const sepoliaUrl = `https://eth-sepolia.g.alchemy.com/v2/${alchemyApiKey}`;
-
-    this.mainnetClient = createPublicClient({
-      chain: mainnet,
-      transport: http(mainnetUrl),
-    });
-
-    this.sepoliaClient = createPublicClient({
-      chain: sepolia,
-      transport: http(sepoliaUrl),
-    });
-
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(SIWE_CONFIGS) private readonly siweConfigs: SiweConfigMap,
+  ) {
     this.logger.log('AuthService initialized successfully');
   }
 
-
-  generateNonce(address: string, scope?: Scope): { nonce: string; expiresAt: number } {
-    const nonce = generateSiweNonce();
-    const issuedAt = Date.now();
-    const ttlMs = Number(this.configService.get<number>('SIWE_NONCE_TTL_MS') || 5 * 60 * 1000);
-    const expiresAt = issuedAt + ttlMs;
+  generateNonce(
+    address: string,
+    scope?: Scope,
+  ): { nonce: string; expiresAt: number } {
+    const normalizedAddress = address.toLowerCase();
     const effectiveScope: Scope = scope ?? 'avatar+header';
-    this.addressToNonce.set(address.toLowerCase(), {
+    const issuedAt = Date.now();
+    const records =
+      this.addressToNonces.get(normalizedAddress) ??
+      new Map<Scope, NonceRecord>();
+    this.pruneExpiredRecords(normalizedAddress, records, issuedAt);
+
+    const existing = records.get(effectiveScope);
+    if (existing) {
+      return { nonce: existing.nonce, expiresAt: existing.expiresAt };
+    }
+
+    const nonce = generateNonce();
+    const configuredTtl = Number(
+      this.configService.get<number>('SIWE_NONCE_TTL_MS'),
+    );
+    const ttlMs =
+      Number.isFinite(configuredTtl) && configuredTtl > 0
+        ? configuredTtl
+        : 5 * 60 * 1000;
+    const expiresAt = issuedAt + ttlMs;
+
+    records.set(effectiveScope, {
       nonce,
       issuedAt,
       expiresAt,
       scope: effectiveScope,
       used: { avatar: false, header: false },
     });
+    this.addressToNonces.set(normalizedAddress, records);
 
     return { nonce, expiresAt };
   }
 
-  private getRpcClientForChainId(chainId: number): PublicClient {
-    switch (chainId) {
-      case 1: // mainnet
-        return this.mainnetClient;
-      case 11155111: // sepolia
-        return this.sepoliaClient;
-      default:
-        this.logger.warn(`Unsupported chain ID: ${chainId}, defaulting to mainnet`);
-        return this.mainnetClient;
-    }
-  }
+  async verifySiweAndConsume(
+    params: VerificationParams,
+  ): Promise<{ address: string }> {
+    const { action, message, signature, address, expectedChainId } = params;
+    const siwe = this.parseMessage(message);
+    const signedAddress = siwe.address.toLowerCase();
 
-  async verifySiweAndConsume(params: VerificationParams): Promise<{ address: string }> {
-    const { action, message, signature, address } = params;
+    this.logger.log(
+      `Starting signature verification for signed address: ${signedAddress}, action: ${action}`,
+    );
 
-    this.logger.log(`Starting signature verification for address: ${address}, action: ${action}`);
-
-    const lower = address.toLowerCase();
-    const record = this.addressToNonce.get(lower);
-    if (!record) {
-      throw new UnauthorizedException({ code: ErrorCodes.NONCE_NOT_FOUND, details: { address } });
-    }
-
-    try {
-      const siwe = new SiweMessage(message);
-      const chainId = Number(siwe.chainId);
-      const rpcClient = this.getRpcClientForChainId(chainId);
-      
-      // Detect smart contract signatures
-      const isSmartContractSignature = signature.length > 132;
-      const isLikelyErc6492 = signature.toLowerCase().includes('6492');
-      const shouldUseAmbire = isSmartContractSignature || isLikelyErc6492;
-
-      let isValid = false;
-      if (shouldUseAmbire) {
-        // Use Ambire validator for smart contract signatures
-        isValid = await ambireVerifyMessage({
-          signer: address,
-          message,
-          signature,
-          provider: rpcClient,
-        });
-      } else {
-        // Default SIWE verification for EOA signatures
-        const fields = await siwe.verify({ signature, nonce: record.nonce });
-        isValid = !!fields.success;
-      }
-
-      if (!isValid) {
-        throw new UnauthorizedException({ 
-          code: shouldUseAmbire ? ErrorCodes.SMART_CONTRACT_SIGNATURE_VERIFICATION_FAILED : ErrorCodes.EOA_SIGNATURE_VERIFICATION_FAILED,
-          details: { message: 'Signature verification failed' }
-        });
-      }
-
-      // Validate SIWE constraints
-      if (siwe.address.toLowerCase() !== lower) {
-        throw new UnauthorizedException({ 
-          code: ErrorCodes.ADDRESS_MISMATCH,
-          details: { message: 'Address in signature does not match provided address' }
-        });
-      }
-      if (siwe.nonce !== record.nonce) {
-        throw new UnauthorizedException({ 
-          code: ErrorCodes.NONCE_MISMATCH,
-          details: { message: 'Nonce in signature does not match expected nonce' }
-        });
-      }
-
-      // Check expiration
-      const now = new Date();
-      if (siwe.expirationTime && new Date(siwe.expirationTime) < now) {
-        throw new UnauthorizedException({ 
-          code: ErrorCodes.SIGNATURE_EXPIRED,
-          details: { message: 'Signature has expired' }
-        });
-      }
-      if (siwe.notBefore && new Date(siwe.notBefore) > now) {
-        throw new UnauthorizedException({ 
-          code: ErrorCodes.SIGNATURE_EXPIRED,
-          details: { message: 'Signature is not yet valid' }
-        });
-      }
-
-      // Check nonce expiration
-      if (Date.now() > record.expiresAt) {
-        this.addressToNonce.delete(lower);
-        throw new UnauthorizedException({ 
-          code: ErrorCodes.SIGNATURE_EXPIRED,
-          details: { message: 'Nonce has expired' }
-        });
-      }
-
-      // Validate allowed chain IDs
-      const allowedChainIds = (this.configService.get<string>('SIWE_ALLOWED_CHAIN_IDS') || '1,11155111')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-        .map((v) => Number(v))
-        .filter((v) => Number.isFinite(v));
-      
-      if (allowedChainIds.length > 0 && !allowedChainIds.includes(Number(siwe.chainId))) {
-        throw new UnauthorizedException({ 
-          code: ErrorCodes.INVALID_CHAIN_ID,
-          details: { message: 'Chain ID not allowed' }
-        });
-      }
-
-      this.logger.log(`Signature verification successful for address: ${address}`);
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      this.logger.error(`Unexpected error during signature verification: ${error.message}`, error.stack);
-      throw new UnauthorizedException({ 
-        code: ErrorCodes.SIGNATURE_VERIFICATION_FAILED,
-        details: { message: 'Unexpected error during signature verification' }
+    // The body address is retained only for backwards compatibility. Identity
+    // and nonce selection both come from the signed SIWE payload.
+    if (address && address.toLowerCase() !== signedAddress) {
+      throw new UnauthorizedException({
+        code: ErrorCodes.ADDRESS_MISMATCH,
+        details: {
+          message: 'Address in signature does not match provided address',
+        },
       });
     }
 
-    // Scope and consumption checks
-    const scope = record.scope;
+    const records = this.addressToNonces.get(signedAddress);
+    if (!records) {
+      throw new UnauthorizedException({
+        code: ErrorCodes.NONCE_NOT_FOUND,
+        details: { address: signedAddress },
+      });
+    }
+
+    const record = [...records.values()].find(
+      (candidate) => candidate.nonce === siwe.nonce,
+    );
+    if (!record) {
+      this.pruneExpiredRecords(signedAddress, records, Date.now());
+      throw new UnauthorizedException({
+        code: ErrorCodes.NONCE_MISMATCH,
+        details: {
+          message: 'Nonce in signature does not match any issued nonce',
+        },
+      });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      this.deleteRecord(signedAddress, records, record.scope);
+      throw new UnauthorizedException({
+        code: ErrorCodes.SIGNATURE_EXPIRED,
+        details: { message: 'Nonce has expired' },
+      });
+    }
+
+    if (siwe.chainId !== expectedChainId) {
+      throw new UnauthorizedException({
+        code: ErrorCodes.INVALID_CHAIN_ID,
+        details: {
+          message: 'SIWE chain ID does not match the requested network',
+          expected: expectedChainId,
+          received: siwe.chainId,
+        },
+      });
+    }
+
+    this.assertAllowedChainId(siwe.chainId);
+    const siweConfig = this.siweConfigs.get(siwe.chainId);
+    if (!siweConfig) {
+      throw new UnauthorizedException({
+        code: ErrorCodes.INVALID_CHAIN_ID,
+        details: {
+          message: 'No SIWE verification client is configured for this chain',
+          chainId: siwe.chainId,
+        },
+      });
+    }
+
+    let verification: SiweResponse;
+    try {
+      verification = await siwe.verify(
+        {
+          signature,
+          nonce: record.nonce,
+          // This is intentionally derived from the signed message. The service
+          // is open to any integrator domain, so this checks message consistency
+          // but does not provide origin binding to a server-controlled allowlist.
+          domain: siwe.domain,
+          chainId: expectedChainId,
+        },
+        { config: siweConfig, suppressExceptions: true },
+      );
+    } catch {
+      this.logger.error('Unexpected SIWE verification failure');
+      throw new UnauthorizedException({
+        code: ErrorCodes.SIGNATURE_VERIFICATION_FAILED,
+        details: { message: 'Signature verification failed' },
+      });
+    }
+
+    if (!verification.success) {
+      this.throwVerificationError(verification.error);
+    }
+
+    const verifiedAddress = verification.data.address.toLowerCase();
+    if (address && address.toLowerCase() !== verifiedAddress) {
+      throw new UnauthorizedException({
+        code: ErrorCodes.ADDRESS_MISMATCH,
+        details: {
+          message: 'Verified address does not match provided address',
+        },
+      });
+    }
+
+    this.consumeScope(record, action, signedAddress);
+    this.logger.log(
+      `Signature verification successful for address: ${verifiedAddress}`,
+    );
+
+    return { address: verifiedAddress };
+  }
+
+  private parseMessage(message: string): SiweMessage {
+    try {
+      return new SiweMessage(message);
+    } catch {
+      this.logger.warn('Unable to parse SIWE message');
+      throw new UnauthorizedException({
+        code: ErrorCodes.MALFORMED_MESSAGE,
+        details: { message: 'Unable to parse SIWE message' },
+      });
+    }
+  }
+
+  private assertAllowedChainId(chainId: number): void {
+    const configured =
+      this.configService.get<string>('SIWE_ALLOWED_CHAIN_IDS') ?? '1,11155111';
+    const allowedChainIds = configured
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    if (!allowedChainIds.includes(chainId)) {
+      throw new UnauthorizedException({
+        code: ErrorCodes.INVALID_CHAIN_ID,
+        details: { message: 'Chain ID not allowed', chainId },
+      });
+    }
+  }
+
+  private throwVerificationError(error?: SiweError): never {
+    const type = error?.type;
+    let code: ErrorCodes;
+
+    switch (type) {
+      case SiweErrorType.NONCE_MISMATCH:
+        code = ErrorCodes.NONCE_MISMATCH;
+        break;
+      case SiweErrorType.EXPIRED_MESSAGE:
+        code = ErrorCodes.SIGNATURE_EXPIRED;
+        break;
+      case SiweErrorType.NOT_YET_VALID_MESSAGE:
+        code = ErrorCodes.MESSAGE_NOT_YET_VALID;
+        break;
+      case SiweErrorType.INVALID_ADDRESS:
+        code = ErrorCodes.INVALID_ADDRESS;
+        break;
+      case SiweErrorType.CHAIN_ID_MISMATCH:
+      case SiweErrorType.INVALID_SIGNATURE_CHAIN_ID:
+        code = ErrorCodes.INVALID_CHAIN_ID;
+        break;
+      case SiweErrorType.UNABLE_TO_PARSE:
+      case SiweErrorType.MALFORMED_MESSAGE:
+      case SiweErrorType.INVALID_DOMAIN:
+      case SiweErrorType.INVALID_URI:
+      case SiweErrorType.INVALID_NONCE:
+      case SiweErrorType.INVALID_MESSAGE_VERSION:
+      case SiweErrorType.INVALID_TIME_FORMAT:
+        code = ErrorCodes.MALFORMED_MESSAGE;
+        break;
+      default:
+        code = ErrorCodes.SIGNATURE_VERIFICATION_FAILED;
+    }
+
+    throw new UnauthorizedException({
+      code,
+      details: {
+        message: error?.message ?? 'Signature verification failed',
+      },
+    });
+  }
+
+  private consumeScope(
+    record: NonceRecord,
+    action: Action,
+    address: string,
+  ): void {
+    // This compare-and-consume section is deliberately synchronous. A second
+    // request may have completed while v4 awaited an RPC response, so operate
+    // only on the exact record that was verified and is still current.
+    const records = this.addressToNonces.get(address);
+    const current = records?.get(record.scope);
+    if (!records || !current) {
+      throw new UnauthorizedException({ code: ErrorCodes.NONCE_NOT_FOUND });
+    }
+    if (current !== record || current.nonce !== record.nonce) {
+      throw new UnauthorizedException({ code: ErrorCodes.NONCE_MISMATCH });
+    }
+    if (Date.now() > current.expiresAt) {
+      this.deleteRecord(address, records, current.scope);
+      throw new UnauthorizedException({
+        code: ErrorCodes.SIGNATURE_EXPIRED,
+        details: { message: 'Nonce has expired' },
+      });
+    }
+
     if (action === 'avatar') {
-      if (scope === 'header') {
+      if (current.scope === 'header' || current.used.avatar) {
         throw new ForbiddenException({ code: ErrorCodes.UNAUTHORIZED });
       }
-      if (record.used.avatar) {
-        throw new ForbiddenException({ code: ErrorCodes.UNAUTHORIZED });
-      }
-      record.used.avatar = true;
-    } else if (action === 'header') {
-      if (scope === 'avatar') {
-        throw new ForbiddenException({ code: ErrorCodes.UNAUTHORIZED });
-      }
-      if (record.used.header) {
-        throw new ForbiddenException({ code: ErrorCodes.UNAUTHORIZED });
-      }
-      record.used.header = true;
-    }
-
-    // If both consumed or expired, delete record
-    const bothConsumed = record.used.avatar && record.used.header;
-    if (bothConsumed || Date.now() > record.expiresAt) {
-      this.addressToNonce.delete(lower);
+      current.used.avatar = true;
     } else {
-      this.addressToNonce.set(lower, record);
+      if (current.scope === 'avatar' || current.used.header) {
+        throw new ForbiddenException({ code: ErrorCodes.UNAUTHORIZED });
+      }
+      current.used.header = true;
     }
 
-    return { address: lower };
+    const scopeExhausted =
+      (current.scope === 'avatar' && current.used.avatar) ||
+      (current.scope === 'header' && current.used.header) ||
+      (current.scope === 'avatar+header' &&
+        current.used.avatar &&
+        current.used.header);
+
+    if (scopeExhausted) {
+      this.deleteRecord(address, records, current.scope);
+    }
+  }
+
+  private pruneExpiredRecords(
+    address: string,
+    records: Map<Scope, NonceRecord>,
+    now: number,
+  ): void {
+    for (const [scope, record] of records) {
+      if (now > record.expiresAt) {
+        records.delete(scope);
+      }
+    }
+
+    if (records.size === 0) {
+      this.addressToNonces.delete(address);
+    }
+  }
+
+  private deleteRecord(
+    address: string,
+    records: Map<Scope, NonceRecord>,
+    scope: Scope,
+  ): void {
+    records.delete(scope);
+    if (records.size === 0) {
+      this.addressToNonces.delete(address);
+    }
   }
 }
-
-

@@ -66,7 +66,7 @@ export class HeaderUploadResponseDto {
   network!: string;
 
   @ApiProperty({ 
-    example: 'https://avtr.cc/avatar.offchainsub.eth/header',
+    example: 'https://avtr.cc/avatar.offchainsub.eth/h',
     description: 'Public URL to access the header image'
   })
   headerUrl!: string;
@@ -128,5 +128,4 @@ export class DeleteResponseDto {
   })
   deletedAt!: string;
 }
-
 
