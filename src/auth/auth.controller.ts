@@ -1,15 +1,24 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseInterceptors,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthRateLimit } from '../rate-limit/rate-limit.decorators';
 import { ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NonceDto } from './dto/auth-requests.dto';
 import { NonceResponseDto } from './dto/auth-responses.dto';
+import { AvatarHttpMetricsInterceptor } from '../observability/avatar-http-metrics.interceptor';
 
 /**
  * Authentication controller for SIWE-based login and JWT issuance.
  */
 @ApiTags('auth')
 @Controller('auth')
+@UseInterceptors(AvatarHttpMetricsInterceptor)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -42,7 +51,10 @@ export class AuthController {
     description: 'Nonce generated',
     type: NonceResponseDto,
     schema: {
-      example: { nonce: '5e3239f5a23becc104aa740d93083559a29707119f5f18643a502a2c122b2d8157402df9385b30f1b4cd8f583017ac27' },
+      example: {
+        nonce:
+          '5e3239f5a23becc104aa740d93083559a29707119f5f18643a502a2c122b2d8157402df9385b30f1b4cd8f583017ac27',
+      },
     },
   })
   @HttpCode(HttpStatus.OK)
@@ -50,5 +62,3 @@ export class AuthController {
     return this.authService.generateNonce(dto.address, dto.scope);
   }
 }
-
-

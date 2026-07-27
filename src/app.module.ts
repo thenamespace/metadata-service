@@ -7,6 +7,7 @@ import { MetadataModule } from './metadata/metadata.module';
 import { HealthController } from './health/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { AvatarModule } from './avatar/avatar.module';
+import { AvatarObservabilityModule } from './observability/avatar-observability.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AvatarModule } from './avatar/avatar.module';
     }),
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     ThrottlerModule.forRoot([{ ttl: 60, limit: 100 }]),
+    AvatarObservabilityModule,
     MetadataModule,
     AuthModule,
     AvatarModule,

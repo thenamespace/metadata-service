@@ -149,7 +149,9 @@ describe('AuthService', () => {
             expectedChainId: 1,
             ...signed,
           }),
-        ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+        ).resolves.toMatchObject({
+          address: TEST_ACCOUNT.address.toLowerCase(),
+        });
       },
     );
 
@@ -193,7 +195,7 @@ describe('AuthService', () => {
           expectedChainId: 1,
           ...firstSigned,
         }),
-      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+      ).resolves.toMatchObject({ address: TEST_ACCOUNT.address.toLowerCase() });
 
       const replacement = service.generateNonce(TEST_ACCOUNT.address, 'avatar');
       const replacementSigned = await signSiweMessage({
@@ -208,7 +210,7 @@ describe('AuthService', () => {
           expectedChainId: 1,
           ...replacementSigned,
         }),
-      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+      ).resolves.toMatchObject({ address: TEST_ACCOUNT.address.toLowerCase() });
     });
 
     it('replaces an expired same-scope nonce with a fresh nonce', async () => {
@@ -253,7 +255,7 @@ describe('AuthService', () => {
           expectedChainId: 1,
           ...avatarSigned,
         }),
-      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+      ).resolves.toMatchObject({ address: TEST_ACCOUNT.address.toLowerCase() });
       await expect(
         service.verifySiweAndConsume({
           action: 'header',
@@ -261,7 +263,7 @@ describe('AuthService', () => {
           expectedChainId: 1,
           ...headerSigned,
         }),
-      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+      ).resolves.toMatchObject({ address: TEST_ACCOUNT.address.toLowerCase() });
     });
 
     it('rejects when no nonce exists for the request-body address', async () => {
@@ -480,9 +482,11 @@ describe('AuthService', () => {
         ...signed,
       };
 
-      await expect(service.verifySiweAndConsume(params)).resolves.toEqual({
-        address: TEST_ACCOUNT.address.toLowerCase(),
-      });
+      await expect(service.verifySiweAndConsume(params)).resolves.toMatchObject(
+        {
+          address: TEST_ACCOUNT.address.toLowerCase(),
+        },
+      );
       await expect(service.verifySiweAndConsume(params)).rejects.toMatchObject({
         response: { code: ErrorCodes.UNAUTHORIZED },
       });
@@ -502,7 +506,7 @@ describe('AuthService', () => {
           expectedChainId: 1,
           ...signed,
         }),
-      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+      ).resolves.toMatchObject({ address: TEST_ACCOUNT.address.toLowerCase() });
       await expect(
         service.verifySiweAndConsume({
           action: 'header',
@@ -510,7 +514,7 @@ describe('AuthService', () => {
           expectedChainId: 1,
           ...signed,
         }),
-      ).resolves.toEqual({ address: TEST_ACCOUNT.address.toLowerCase() });
+      ).resolves.toMatchObject({ address: TEST_ACCOUNT.address.toLowerCase() });
       await expect(
         service.verifySiweAndConsume({
           action: 'avatar',
@@ -545,8 +549,12 @@ describe('AuthService', () => {
         raceService.verifySiweAndConsume(params),
       ]);
       const fulfilled = results.filter(
-        (result): result is PromiseFulfilledResult<{ address: string }> =>
-          result.status === 'fulfilled',
+        (
+          result,
+        ): result is PromiseFulfilledResult<{
+          address: string;
+          signedDomain: string;
+        }> => result.status === 'fulfilled',
       );
       const rejected = results.filter(
         (result): result is PromiseRejectedResult =>
@@ -556,6 +564,7 @@ describe('AuthService', () => {
       expect(fulfilled).toHaveLength(1);
       expect(fulfilled[0].value).toEqual({
         address: TEST_ACCOUNT.address.toLowerCase(),
+        signedDomain: 'app.example',
       });
       expect(rejected).toHaveLength(1);
       expect(rejected[0].reason).toMatchObject({
@@ -593,8 +602,14 @@ describe('AuthService', () => {
       ]);
 
       expect(results).toEqual([
-        { address: TEST_ACCOUNT.address.toLowerCase() },
-        { address: TEST_ACCOUNT.address.toLowerCase() },
+        {
+          address: TEST_ACCOUNT.address.toLowerCase(),
+          signedDomain: 'app.example',
+        },
+        {
+          address: TEST_ACCOUNT.address.toLowerCase(),
+          signedDomain: 'app.example',
+        },
       ]);
 
       await raceModule.close();
@@ -642,7 +657,7 @@ describe('AuthService', () => {
           message,
           signature: '0xabcd',
         }),
-      ).resolves.toEqual({ address: contractAddress.toLowerCase() });
+      ).resolves.toMatchObject({ address: contractAddress.toLowerCase() });
       expect(checkContractWalletSignature).toHaveBeenCalled();
 
       await contractModule.close();
@@ -693,7 +708,7 @@ describe('AuthService', () => {
       });
       await expect(
         contractService.verifySiweAndConsume(params),
-      ).resolves.toEqual({ address: contractAddress.toLowerCase() });
+      ).resolves.toMatchObject({ address: contractAddress.toLowerCase() });
       expect(checkContractWalletSignature).toHaveBeenCalledTimes(2);
 
       await contractModule.close();

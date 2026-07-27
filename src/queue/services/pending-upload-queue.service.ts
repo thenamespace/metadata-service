@@ -2,11 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Network } from '../../common/enums/network.enum';
 import { FileType } from '../../common/enums/file-type.enum';
 import { IPendingUploadEntry, IPendingUploadQueue } from '../interfaces';
+import { AvatarObservabilityService } from '../../observability/avatar-observability.service';
 
 /**
  * In-memory implementation of pending upload queue.
  * Uses a Map with composite keys for fast lookups.
- * 
+ *
  * @remarks
  * This implementation loses data on service restart, which is acceptable
  * per requirements. For production with high reliability needs, consider
@@ -17,10 +18,16 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
   private readonly logger = new Logger(PendingUploadQueueService.name);
   private readonly queue = new Map<string, IPendingUploadEntry>();
 
+  constructor(private readonly observability: AvatarObservabilityService) {}
+
   /**
    * Generate a unique composite key for the queue entry
    */
-  private getKey(subname: string, network: Network, fileType: FileType): string {
+  private getKey(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): string {
     return `${network}:${subname.toLowerCase()}:${fileType}`;
   }
 
@@ -28,6 +35,7 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
   async add(entry: IPendingUploadEntry): Promise<void> {
     const key = this.getKey(entry.subname, entry.network, entry.fileType);
     this.queue.set(key, entry);
+    this.observability.setPendingQueueSize(this.queue.size);
     this.logger.log({
       msg: 'Added to pending upload queue',
       subname: entry.subname,
@@ -51,9 +59,14 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
-  async remove(subname: string, network: Network, fileType: FileType): Promise<boolean> {
+  async remove(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): Promise<boolean> {
     const key = this.getKey(subname, network, fileType);
     const deleted = this.queue.delete(key);
+    this.observability.setPendingQueueSize(this.queue.size);
     if (deleted) {
       this.logger.log({
         msg: 'Removed from pending upload queue',
@@ -67,7 +80,11 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
-  async get(subname: string, network: Network, fileType: FileType): Promise<IPendingUploadEntry | null> {
+  async get(
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): Promise<IPendingUploadEntry | null> {
     const key = this.getKey(subname, network, fileType);
     return this.queue.get(key) || null;
   }
@@ -82,4 +99,3 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
     return this.queue.size;
   }
 }
-
