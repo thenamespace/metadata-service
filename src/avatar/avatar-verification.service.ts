@@ -247,17 +247,11 @@ export class AvatarVerificationService {
       | 'discarded_owner_mismatch'
       | 'error',
   ): void {
-    this.observability.recordPending(
-      item.fileType,
-      item.network,
-      outcome,
-      item.parentGroup,
-    );
+    this.observability.recordPending(item.fileType, item.network, outcome);
     this.observability.logEvent('avatar.pending_verification.completed', {
       outcome,
       media_type: item.fileType,
       ens_name: item.subname,
-      ens_parent_group: item.parentGroup,
       network: item.network,
       wallet_address: item.address,
       siwe_signed_domain: item.signedDomain,

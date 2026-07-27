@@ -11,7 +11,6 @@ export interface IPendingUploadEntry {
   uploadedAt: Date;
   fileType: FileType;
   signedDomain: string;
-  parentGroup: string;
 }
 
 /**

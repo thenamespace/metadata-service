@@ -227,7 +227,6 @@ export class AvatarController {
     if (!message || !signature || !address) {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
-    const parentGroup = this.observability.resolveParent(subname);
     const { address: verifiedAddress, signedDomain } =
       await this.authService.verifySiweAndConsume({
         action: 'avatar',
@@ -269,7 +268,6 @@ export class AvatarController {
         uploadedAt: new Date(),
         fileType: FileType.AVATAR,
         signedDomain,
-        parentGroup,
       };
       await this.queueService.add(queueEntry);
 
@@ -285,7 +283,6 @@ export class AvatarController {
         network,
         verifiedAddress,
         signedDomain,
-        parentGroup,
         result,
         true,
       );
@@ -323,7 +320,6 @@ export class AvatarController {
         network,
         verifiedAddress,
         signedDomain,
-        parentGroup,
         result,
         false,
       );
@@ -384,7 +380,6 @@ export class AvatarController {
     }
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
-    const parentGroup = this.observability.resolveParent(subname);
     const { address: verifiedAddress, signedDomain } =
       await this.authService.verifySiweAndConsume({
         action: 'avatar',
@@ -411,7 +406,6 @@ export class AvatarController {
         network,
         'delete',
         'not_found',
-        parentGroup,
       );
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
     }
@@ -421,7 +415,6 @@ export class AvatarController {
       network,
       verifiedAddress,
       signedDomain,
-      parentGroup,
     );
 
     return {
@@ -544,7 +537,6 @@ export class AvatarController {
     if (!message || !signature || !address) {
       throw new BadRequestException({ code: ErrorCodes.UNAUTHORIZED });
     }
-    const parentGroup = this.observability.resolveParent(subname);
     const { address: verifiedAddress, signedDomain } =
       await this.authService.verifySiweAndConsume({
         action: 'header',
@@ -586,7 +578,6 @@ export class AvatarController {
         uploadedAt: new Date(),
         fileType: FileType.HEADER,
         signedDomain,
-        parentGroup,
       };
       await this.queueService.add(queueEntry);
 
@@ -602,7 +593,6 @@ export class AvatarController {
         network,
         verifiedAddress,
         signedDomain,
-        parentGroup,
         result,
         true,
       );
@@ -640,7 +630,6 @@ export class AvatarController {
         network,
         verifiedAddress,
         signedDomain,
-        parentGroup,
         result,
         false,
       );
@@ -701,7 +690,6 @@ export class AvatarController {
     }
 
     const message = this.normalizeMessageNewlines(dto.siweMessage);
-    const parentGroup = this.observability.resolveParent(subname);
     const { address: verifiedAddress, signedDomain } =
       await this.authService.verifySiweAndConsume({
         action: 'header',
@@ -728,7 +716,6 @@ export class AvatarController {
         network,
         'delete',
         'not_found',
-        parentGroup,
       );
       throw new BadRequestException({ code: ErrorCodes.NOT_FOUND });
     }
@@ -738,7 +725,6 @@ export class AvatarController {
       network,
       verifiedAddress,
       signedDomain,
-      parentGroup,
     );
 
     return {
@@ -755,7 +741,6 @@ export class AvatarController {
     network: Network,
     walletAddress: string,
     signedDomain: string,
-    parentGroup: string,
     result: UploadResult,
     pending: boolean,
   ): void {
@@ -765,21 +750,12 @@ export class AvatarController {
       : result.isUpdate
         ? 'replaced_active'
         : 'created_active';
-    this.observability.recordMedia(
-      mediaType,
-      network,
-      'upload',
-      outcome,
-      parentGroup,
-    );
+    this.observability.recordMedia(mediaType, network, 'upload', outcome);
     this.observability.logEvent('avatar.media.uploaded', {
       media_type: mediaType,
       operation,
       verification_state: pending ? 'pending' : 'active',
       ens_name: subname,
-      ens_parent_group: parentGroup,
-      ens_parent_source:
-        parentGroup === 'unknown' ? 'unknown' : 'configured_longest_suffix',
       network,
       wallet_address: walletAddress,
       siwe_signed_domain: signedDomain,
@@ -794,19 +770,11 @@ export class AvatarController {
     network: Network,
     walletAddress: string,
     signedDomain: string,
-    parentGroup: string,
   ): void {
-    this.observability.recordMedia(
-      mediaType,
-      network,
-      'delete',
-      'deleted',
-      parentGroup,
-    );
+    this.observability.recordMedia(mediaType, network, 'delete', 'deleted');
     this.observability.logEvent('avatar.media.deleted', {
       media_type: mediaType,
       ens_name: subname,
-      ens_parent_group: parentGroup,
       network,
       wallet_address: walletAddress,
       siwe_signed_domain: signedDomain,

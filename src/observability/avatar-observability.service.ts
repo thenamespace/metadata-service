@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   HttpException,
   Injectable,
   Logger,
@@ -7,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Counter, Gauge, Histogram, Registry } from 'prom-client';
-import { normalize } from 'viem/ens';
 import { FileType } from '../common/enums/file-type.enum';
 import { Network } from '../common/enums/network.enum';
 
@@ -26,7 +24,6 @@ export class AvatarObservabilityService implements OnModuleInit {
   private readonly registry = new Registry();
   private readonly enabled: boolean;
   private readonly token: string;
-  private parentNames: string[] = [];
 
   private readonly httpRequests = new Counter({
     name: 'avatar_service_http_requests_total',
@@ -57,13 +54,7 @@ export class AvatarObservabilityService implements OnModuleInit {
   private readonly mediaOperations = new Counter({
     name: 'avatar_service_media_operations_total',
     help: 'Terminal avatar and header operations.',
-    labelNames: [
-      'media_type',
-      'network',
-      'operation',
-      'outcome',
-      'parent_group',
-    ] as const,
+    labelNames: ['media_type', 'network', 'operation', 'outcome'] as const,
     registers: [this.registry],
   });
   private readonly ensLookups = new Counter({
@@ -107,7 +98,7 @@ export class AvatarObservabilityService implements OnModuleInit {
   private readonly pendingVerifications = new Counter({
     name: 'avatar_service_pending_verifications_total',
     help: 'Pending avatar/header verification outcomes.',
-    labelNames: ['media_type', 'network', 'outcome', 'parent_group'] as const,
+    labelNames: ['media_type', 'network', 'outcome'] as const,
     registers: [this.registry],
   });
   private readonly pendingCycleDuration = new Histogram({
@@ -132,24 +123,6 @@ export class AvatarObservabilityService implements OnModuleInit {
         'AVATAR_METRICS_TOKEN must contain at least 32 characters when metrics are enabled',
       );
     }
-    const configured = (this.config.get<string>('AVATAR_PARENT_NAMES') ?? '')
-      .split(',')
-      .map((name) => name.trim())
-      .filter(Boolean);
-    const parents = new Set<string>();
-    for (const name of configured) {
-      try {
-        parents.add(normalize(name));
-      } catch {
-        throw new Error(`Invalid ENS parent configured in AVATAR_PARENT_NAMES`);
-      }
-    }
-    if (parents.size > 100) {
-      throw new Error('AVATAR_PARENT_NAMES supports at most 100 unique names');
-    }
-    this.parentNames = [...parents].sort(
-      (left, right) => right.split('.').length - left.split('.').length,
-    );
   }
 
   isEnabled(): boolean {
@@ -166,20 +139,6 @@ export class AvatarObservabilityService implements OnModuleInit {
 
   contentType(): string {
     return this.registry.contentType;
-  }
-
-  resolveParent(name: string): string {
-    let normalized: string;
-    try {
-      normalized = normalize(name.trim());
-    } catch {
-      throw new BadRequestException({ code: 'INVALID_SUBNAME_FORMAT' });
-    }
-    return (
-      this.parentNames.find(
-        (parent) => normalized === parent || normalized.endsWith(`.${parent}`),
-      ) ?? 'unknown'
-    );
   }
 
   recordHttp(
@@ -236,7 +195,6 @@ export class AvatarObservabilityService implements OnModuleInit {
     network: Network,
     operation: MediaOperation,
     outcome: MediaOutcome,
-    parentGroup: string,
   ): void {
     if (!this.enabled) return;
     this.mediaOperations.inc({
@@ -244,7 +202,6 @@ export class AvatarObservabilityService implements OnModuleInit {
       network,
       operation,
       outcome,
-      parent_group: parentGroup,
     });
   }
 
@@ -294,18 +251,12 @@ export class AvatarObservabilityService implements OnModuleInit {
     if (this.enabled) this.pendingUploads.set(size);
   }
 
-  recordPending(
-    mediaType: FileType,
-    network: Network,
-    outcome: string,
-    parentGroup: string,
-  ): void {
+  recordPending(mediaType: FileType, network: Network, outcome: string): void {
     if (!this.enabled) return;
     this.pendingVerifications.inc({
       media_type: mediaType,
       network,
       outcome,
-      parent_group: parentGroup,
     });
   }
 
