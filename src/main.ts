@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
+import { ConsoleLogger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   FastifyAdapter,
@@ -15,23 +15,35 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
+    {
+      logger: new ConsoleLogger({
+        json: true,
+        colors: false,
+      }),
+    },
   );
 
   const configService = app.get(ConfigService);
 
-  await app.register(cors as unknown as any, {
-    origin: '*',
-    methods: ['POST', 'GET', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: '*',
-  } as any);
+  await app.register(
+    cors as unknown as any,
+    {
+      origin: '*',
+      methods: ['POST', 'GET', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      allowedHeaders: '*',
+    } as any,
+  );
 
-  await app.register(multipart as unknown as any, {
-    attachFieldsToBody: true,
-    limits: {
-      fileSize: 5 * 1024 * 1024,
-      files: 1,
-    },
-  } as any);
+  await app.register(
+    multipart as unknown as any,
+    {
+      attachFieldsToBody: true,
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+        files: 1,
+      },
+    } as any,
+  );
 
   // Static local serving removed; GCS is always used
 

@@ -3,6 +3,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,9 @@ import {
 } from '@signinwithethereum/siwe';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 import { SIWE_CONFIGS, SiweConfigMap } from './siwe.config';
+import { AvatarObservabilityService } from '../observability/avatar-observability.service';
+import { FileType } from '../common/enums/file-type.enum';
+import { Network } from '../common/enums/network.enum';
 
 type Scope = 'avatar' | 'header' | 'avatar+header';
 type Action = 'avatar' | 'header';
@@ -43,6 +47,8 @@ export class AuthService {
   constructor(
     private readonly configService: ConfigService,
     @Inject(SIWE_CONFIGS) private readonly siweConfigs: SiweConfigMap,
+    @Optional()
+    private readonly observability?: AvatarObservabilityService,
   ) {
     this.logger.log('AuthService initialized successfully');
   }
@@ -88,7 +94,33 @@ export class AuthService {
 
   async verifySiweAndConsume(
     params: VerificationParams,
-  ): Promise<{ address: string }> {
+  ): Promise<{ address: string; signedDomain: string }> {
+    const { action, expectedChainId } = params;
+    const startedAt = process.hrtime.bigint();
+    const network = expectedChainId === 1 ? Network.MAINNET : Network.SEPOLIA;
+    try {
+      const result = await this.verifySiwe(params);
+      this.observability?.recordSiwe(
+        action === 'avatar' ? FileType.AVATAR : FileType.HEADER,
+        network,
+        'success',
+        Number(process.hrtime.bigint() - startedAt) / 1e9,
+      );
+      return result;
+    } catch (error) {
+      this.observability?.recordSiwe(
+        action === 'avatar' ? FileType.AVATAR : FileType.HEADER,
+        network,
+        this.observability?.siweResult(error) ?? 'unknown_error',
+        Number(process.hrtime.bigint() - startedAt) / 1e9,
+      );
+      throw error;
+    }
+  }
+
+  private async verifySiwe(
+    params: VerificationParams,
+  ): Promise<{ address: string; signedDomain: string }> {
     const { action, message, signature, address, expectedChainId } = params;
     const siwe = this.parseMessage(message);
     const signedAddress = siwe.address.toLowerCase();
@@ -201,7 +233,7 @@ export class AuthService {
       `Signature verification successful for address: ${verifiedAddress}`,
     );
 
-    return { address: verifiedAddress };
+    return { address: verifiedAddress, signedDomain: siwe.domain };
   }
 
   private parseMessage(message: string): SiweMessage {
