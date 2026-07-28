@@ -2,7 +2,6 @@ import {
   HttpException,
   Injectable,
   Logger,
-  OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Counter, Gauge, Histogram, Registry } from 'prom-client';
@@ -19,11 +18,10 @@ type MediaOutcome =
   | 'error';
 
 @Injectable()
-export class AvatarObservabilityService implements OnModuleInit {
+export class AvatarObservabilityService {
   private readonly logger = new Logger(AvatarObservabilityService.name);
   private readonly registry = new Registry();
   private readonly enabled: boolean;
-  private readonly token: string;
 
   private readonly httpRequests = new Counter({
     name: 'avatar_service_http_requests_total',
@@ -114,23 +112,10 @@ export class AvatarObservabilityService implements OnModuleInit {
       throw new Error('AVATAR_METRICS_ENABLED must be true or false');
     }
     this.enabled = rawEnabled.toLowerCase() === 'true';
-    this.token = this.config.get<string>('AVATAR_METRICS_TOKEN') ?? '';
-  }
-
-  onModuleInit(): void {
-    if (this.enabled && this.token.length < 32) {
-      throw new Error(
-        'AVATAR_METRICS_TOKEN must contain at least 32 characters when metrics are enabled',
-      );
-    }
   }
 
   isEnabled(): boolean {
     return this.enabled;
-  }
-
-  getToken(): string {
-    return this.token;
   }
 
   async metrics(): Promise<string> {

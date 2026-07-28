@@ -9,24 +9,19 @@ function createService(
   const service = new AvatarObservabilityService({
     get: (key: string) => env[key],
   } as ConfigService);
-  service.onModuleInit();
   return service;
 }
 
 describe('AvatarObservabilityService', () => {
-  it('requires a strong token only when metrics are enabled', () => {
+  it('enables metrics without requiring a token', () => {
     expect(() =>
-      createService({
-        AVATAR_METRICS_ENABLED: 'true',
-        AVATAR_METRICS_TOKEN: 'short',
-      }),
-    ).toThrow('at least 32 characters');
+      createService({ AVATAR_METRICS_ENABLED: 'true' }),
+    ).not.toThrow();
   });
 
   it('keeps exact names and signed domains out of Prometheus labels', async () => {
     const service = createService({
       AVATAR_METRICS_ENABLED: 'true',
-      AVATAR_METRICS_TOKEN: '01234567890123456789012345678901',
     });
     service.recordMedia(
       FileType.AVATAR,
