@@ -2,9 +2,7 @@ import {
   HttpException,
   Injectable,
   Logger,
-  OnModuleInit,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 import { FileType } from '../common/enums/file-type.enum';
 import { Network } from '../common/enums/network.enum';
@@ -19,11 +17,9 @@ type MediaOutcome =
   | 'error';
 
 @Injectable()
-export class AvatarObservabilityService implements OnModuleInit {
+export class AvatarObservabilityService {
   private readonly logger = new Logger(AvatarObservabilityService.name);
   private readonly registry = new Registry();
-  private readonly enabled: boolean;
-  private readonly token: string;
 
   private readonly httpRequests = new Counter({
     name: 'avatar_service_http_requests_total',
@@ -107,32 +103,6 @@ export class AvatarObservabilityService implements OnModuleInit {
     registers: [this.registry],
   });
 
-  constructor(private readonly config: ConfigService) {
-    const rawEnabled =
-      this.config.get<string>('AVATAR_METRICS_ENABLED') ?? 'false';
-    if (!['true', 'false'].includes(rawEnabled.toLowerCase())) {
-      throw new Error('AVATAR_METRICS_ENABLED must be true or false');
-    }
-    this.enabled = rawEnabled.toLowerCase() === 'true';
-    this.token = this.config.get<string>('AVATAR_METRICS_TOKEN') ?? '';
-  }
-
-  onModuleInit(): void {
-    if (this.enabled && this.token.length < 32) {
-      throw new Error(
-        'AVATAR_METRICS_TOKEN must contain at least 32 characters when metrics are enabled',
-      );
-    }
-  }
-
-  isEnabled(): boolean {
-    return this.enabled;
-  }
-
-  getToken(): string {
-    return this.token;
-  }
-
   async metrics(): Promise<string> {
     return this.registry.metrics();
   }
@@ -147,7 +117,6 @@ export class AvatarObservabilityService implements OnModuleInit {
     statusCode: number,
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     const labels = {
       method,
       route,
@@ -163,7 +132,6 @@ export class AvatarObservabilityService implements OnModuleInit {
     result: string,
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     this.siweVerifications.inc({ action, network, result });
     this.siweDuration.observe({ action, network }, durationSeconds);
   }
@@ -196,7 +164,6 @@ export class AvatarObservabilityService implements OnModuleInit {
     operation: MediaOperation,
     outcome: MediaOutcome,
   ): void {
-    if (!this.enabled) return;
     this.mediaOperations.inc({
       media_type: mediaType,
       network,
@@ -206,7 +173,7 @@ export class AvatarObservabilityService implements OnModuleInit {
   }
 
   recordUploadSize(mediaType: FileType, bytes: number): void {
-    if (this.enabled) this.uploadSize.observe({ media_type: mediaType }, bytes);
+    this.uploadSize.observe({ media_type: mediaType }, bytes);
   }
 
   recordEnsLookup(
@@ -215,7 +182,6 @@ export class AvatarObservabilityService implements OnModuleInit {
     outcome: 'found' | 'not_found' | 'invalid_name' | 'rpc_error',
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     this.ensLookups.inc({
       network,
       cache_status: cacheStatus,
@@ -234,7 +200,6 @@ export class AvatarObservabilityService implements OnModuleInit {
     outcome: 'success' | 'not_found' | 'error',
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     this.storageOperations.inc({
       operation,
       media_type: mediaType,
@@ -248,11 +213,10 @@ export class AvatarObservabilityService implements OnModuleInit {
   }
 
   setPendingQueueSize(size: number): void {
-    if (this.enabled) this.pendingUploads.set(size);
+    this.pendingUploads.set(size);
   }
 
   recordPending(mediaType: FileType, network: Network, outcome: string): void {
-    if (!this.enabled) return;
     this.pendingVerifications.inc({
       media_type: mediaType,
       network,
@@ -261,7 +225,7 @@ export class AvatarObservabilityService implements OnModuleInit {
   }
 
   recordPendingCycle(durationSeconds: number): void {
-    if (this.enabled) this.pendingCycleDuration.observe(durationSeconds);
+    this.pendingCycleDuration.observe(durationSeconds);
   }
 
   logEvent(event: string, fields: Record<string, unknown>): void {
