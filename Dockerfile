@@ -1,5 +1,5 @@
-# Use Node.js LTS version as the base image
-FROM node:20-slim
+# pnpm 11.17.0 requires Node.js 22.13+ (it uses the node:sqlite built-in module).
+FROM node:22-slim
 
 # Install system packages needed for canvas and build tools
 RUN apt-get update && apt-get install -y \
@@ -22,16 +22,11 @@ RUN corepack enable
 # Set working directory
 WORKDIR /app
 
-# Copy package files and TypeScript config
-COPY package.json pnpm-lock.yaml tsconfig.json tsconfig.build.json ./
+# Copy package files, pnpm policy, and TypeScript config
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.build.json ./
 
-# Clear any existing node_modules and install fresh
-RUN rm -rf node_modules
+# Install exactly what is recorded in the lockfile
 RUN pnpm install --frozen-lockfile
-
-# Specifically rebuild canvas to ensure native bindings work
-RUN cd node_modules/.pnpm/canvas*/node_modules/canvas && npm run install || true
-RUN pnpm rebuild canvas
 
 # Copy source code
 COPY src/ ./src/

@@ -1,5 +1,6 @@
-ignoredBuiltDependencies:
-  - '@nestjs/core'
-  - '@scarf/scarf'
-  - '@swc/core'
-  - canvas
+allowBuilds:
+  '@nestjs/core': true
+  '@scarf/scarf': false
+  '@swc/core': true
+  canvas: true
+  sharp: true
