@@ -1,4 +1,4 @@
-import { Controller, Get, HttpException, HttpStatus, Res } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { AvatarObservabilityService } from './avatar-observability.service';
 
@@ -17,9 +17,6 @@ export class AvatarMetricsController {
   async getMetrics(
     @Res() reply: MetricsReply,
   ): Promise<unknown> {
-    if (!this.observability.isEnabled()) {
-      throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
-    }
     return reply
       .code(HttpStatus.OK)
       .header('Cache-Control', 'no-store')

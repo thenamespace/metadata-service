@@ -1,28 +1,25 @@
-import { ConfigService } from '@nestjs/config';
 import { AvatarObservabilityService } from './avatar-observability.service';
 import { FileType } from '../common/enums/file-type.enum';
 import { Network } from '../common/enums/network.enum';
 
-function createService(
-  env: Record<string, string> = {},
-): AvatarObservabilityService {
-  const service = new AvatarObservabilityService({
-    get: (key: string) => env[key],
-  } as ConfigService);
-  return service;
-}
-
 describe('AvatarObservabilityService', () => {
-  it('enables metrics without requiring a token', () => {
-    expect(() =>
-      createService({ AVATAR_METRICS_ENABLED: 'true' }),
-    ).not.toThrow();
+  it('records metrics without configuration', async () => {
+    const service = new AvatarObservabilityService();
+
+    service.recordMedia(
+      FileType.AVATAR,
+      Network.MAINNET,
+      'upload',
+      'created_active',
+    );
+
+    await expect(service.metrics()).resolves.toContain(
+      'avatar_service_media_operations_total',
+    );
   });
 
   it('keeps exact names and signed domains out of Prometheus labels', async () => {
-    const service = createService({
-      AVATAR_METRICS_ENABLED: 'true',
-    });
+    const service = new AvatarObservabilityService();
     service.recordMedia(
       FileType.AVATAR,
       Network.MAINNET,

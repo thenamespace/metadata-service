@@ -5,7 +5,6 @@ import { AvatarObservabilityService } from './avatar-observability.service';
 describe('AvatarMetricsController', () => {
   it('returns metrics without authentication', async () => {
     const observability = {
-      isEnabled: jest.fn().mockReturnValue(true),
       contentType: jest.fn().mockReturnValue('text/plain'),
       metrics: jest.fn().mockResolvedValue('metric 1'),
     } as unknown as AvatarObservabilityService;

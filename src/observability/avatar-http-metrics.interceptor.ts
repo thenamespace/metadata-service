@@ -22,7 +22,6 @@ export class AvatarHttpMetricsInterceptor implements NestInterceptor {
   constructor(private readonly observability: AvatarObservabilityService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    if (!this.observability.isEnabled()) return next.handle();
     const http = context.switchToHttp();
     const request = http.getRequest<FastifyRequest>();
     const reply = http.getResponse<FastifyReply>();

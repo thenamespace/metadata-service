@@ -3,7 +3,6 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 import { FileType } from '../common/enums/file-type.enum';
 import { Network } from '../common/enums/network.enum';
@@ -21,7 +20,6 @@ type MediaOutcome =
 export class AvatarObservabilityService {
   private readonly logger = new Logger(AvatarObservabilityService.name);
   private readonly registry = new Registry();
-  private readonly enabled: boolean;
 
   private readonly httpRequests = new Counter({
     name: 'avatar_service_http_requests_total',
@@ -105,19 +103,6 @@ export class AvatarObservabilityService {
     registers: [this.registry],
   });
 
-  constructor(private readonly config: ConfigService) {
-    const rawEnabled =
-      this.config.get<string>('AVATAR_METRICS_ENABLED') ?? 'false';
-    if (!['true', 'false'].includes(rawEnabled.toLowerCase())) {
-      throw new Error('AVATAR_METRICS_ENABLED must be true or false');
-    }
-    this.enabled = rawEnabled.toLowerCase() === 'true';
-  }
-
-  isEnabled(): boolean {
-    return this.enabled;
-  }
-
   async metrics(): Promise<string> {
     return this.registry.metrics();
   }
@@ -132,7 +117,6 @@ export class AvatarObservabilityService {
     statusCode: number,
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     const labels = {
       method,
       route,
@@ -148,7 +132,6 @@ export class AvatarObservabilityService {
     result: string,
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     this.siweVerifications.inc({ action, network, result });
     this.siweDuration.observe({ action, network }, durationSeconds);
   }
@@ -181,7 +164,6 @@ export class AvatarObservabilityService {
     operation: MediaOperation,
     outcome: MediaOutcome,
   ): void {
-    if (!this.enabled) return;
     this.mediaOperations.inc({
       media_type: mediaType,
       network,
@@ -191,7 +173,7 @@ export class AvatarObservabilityService {
   }
 
   recordUploadSize(mediaType: FileType, bytes: number): void {
-    if (this.enabled) this.uploadSize.observe({ media_type: mediaType }, bytes);
+    this.uploadSize.observe({ media_type: mediaType }, bytes);
   }
 
   recordEnsLookup(
@@ -200,7 +182,6 @@ export class AvatarObservabilityService {
     outcome: 'found' | 'not_found' | 'invalid_name' | 'rpc_error',
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     this.ensLookups.inc({
       network,
       cache_status: cacheStatus,
@@ -219,7 +200,6 @@ export class AvatarObservabilityService {
     outcome: 'success' | 'not_found' | 'error',
     durationSeconds: number,
   ): void {
-    if (!this.enabled) return;
     this.storageOperations.inc({
       operation,
       media_type: mediaType,
@@ -233,11 +213,10 @@ export class AvatarObservabilityService {
   }
 
   setPendingQueueSize(size: number): void {
-    if (this.enabled) this.pendingUploads.set(size);
+    this.pendingUploads.set(size);
   }
 
   recordPending(mediaType: FileType, network: Network, outcome: string): void {
-    if (!this.enabled) return;
     this.pendingVerifications.inc({
       media_type: mediaType,
       network,
@@ -246,7 +225,7 @@ export class AvatarObservabilityService {
   }
 
   recordPendingCycle(durationSeconds: number): void {
-    if (this.enabled) this.pendingCycleDuration.observe(durationSeconds);
+    this.pendingCycleDuration.observe(durationSeconds);
   }
 
   logEvent(event: string, fields: Record<string, unknown>): void {
