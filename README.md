@@ -121,6 +121,8 @@ base64 < private-key.pem | tr -d '\n'
 | `SIWE_NONCE_TTL_MS`      | `300000`              | Nonce lifetime in milliseconds             |
 | `ETH_MAINNET_RPC_URL`    | viem public transport | Custom Mainnet RPC for ENS lookups         |
 | `ETH_SEPOLIA_RPC_URL`    | viem public transport | Custom Sepolia RPC for ENS lookups         |
+| `MAX_AVATAR_BYTES_IN_MB` | `2097152` (2 MiB)      | Max avatar upload size, in bytes           |
+| `MAX_HEADER_BYTES_IN_MB` | `5242880` (5 MiB)      | Max header upload size, in bytes           |
 
 Avatar uploads are limited to 2 MiB and header uploads to 5 MiB. The multipart
 server also enforces a 5 MiB limit per request.
