@@ -1,6 +1,6 @@
 # Avatar service ENS V1 and V2 compatibility plan
 
-Status: Draft for review. No service implementation or deployment changes have been made.
+Status: Implemented locally on `feat/avatar-ensv2-compatibility`. Sepolia activation and deployment remain pending.
 
 ## Objective
 
@@ -85,7 +85,7 @@ Keep endpoint request formats, SIWE authentication, storage paths, and image URL
 5. Prepare an implementation PR from a non-main branch into `main`, including evidence and rollback instructions. Merge requires separate approval.
 6. Validate in Sepolia staging first. Mainnet activation is a later rollout decision after V1 regression and V2 checks pass.
 
-No production credentials or private keys belong in fixtures or documentation. A Sepolia test name and signing arrangement are still needed for the signed tests; public addresses alone do not enable signing.
+No production credentials or private keys belong in fixtures or documentation. The supplied test signer was used only in memory for local signed tests with live Sepolia reads and in-memory image storage.
 
 ## Acceptance criteria
 
@@ -106,4 +106,13 @@ No production credentials or private keys belong in fixtures or documentation. A
 - [Permissioned Resolver permissions](https://docs.ens.domains/ensv2/permissioned-resolver/)
 - [V1 to V2 migration behavior](https://docs.ens.domains/ensv2/migration/)
 
-These references guide implementation. Live deployment verification remains pending.
+## Implementation evidence
+
+- Deployment source pinned to `07e55a056f5b6a9c90119f501bdd05714e67dddd`; helper and canonical resolver root registries matched on Sepolia.
+- Signed local controller checks completed at Sepolia block `12000434`: owner avatar/header create, update, delete; unrelated signer rejection; inherited resolver editor upload/delete; pre-registration pending admission and unresolved cleanup; and V1 mirror compatibility.
+- Storage was in memory. No production bucket writes, onchain transactions, or deployment occurred. HTTP transport and deployed storage remain unverified.
+- Automated suite: 54 tests across 8 suites. Type check, build, changed-TypeScript ESLint, and formatting checks passed. Tests use the existing Jest setup in this PR; no separate test PR is needed or created.
+- V2 is opt-in on Sepolia through the variables documented in README. Mainnet remains on the existing V1 address path.
+- Ownerless V2 names may inherit a resolver before registration. After a definitive failed editor check, a missing ETH address permits pending admission; it never authorizes an immediate V2 upload.
+- Unsupported custom V2 editor interfaces return an error; only PermissionedResolver and the configured PublicResolverV2 editor interfaces are supported initially.
+- The existing pending queue timing and storage concurrency behavior are unchanged. Registration transactions, live permission grant/revoke transactions, and deployed HTTP/storage tests remain outside the completed validation.

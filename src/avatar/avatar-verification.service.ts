@@ -124,8 +124,9 @@ export class AvatarVerificationService {
 
   /**
    * Verify a single pending upload item
-   * - If ENS record matches uploader address: Remove from queue (success)
-   * - If ENS record is null or different: Delete from storage and remove from queue
+   * - If the uploader is authorized: Remove from queue (success)
+   * - If authorization is still pending or denied: Delete the pending upload
+   * - If a lookup fails: Leave the upload queued for retry
    *
    * @returns true if the upload was deleted, false if it was verified
    */
@@ -143,16 +144,16 @@ export class AvatarVerificationService {
     });
 
     try {
-      // Check current ENS record
-      const ensOwner = await this.ensService.getOwnerOrNull({
+      const authorization = await this.ensService.getUploadAuthorization({
         subname,
         network,
+        address,
+        recordKey: fileType,
       });
 
-      if (ensOwner === null) {
-        // No ENS record exists - delete the pending upload
+      if (authorization === 'pending') {
         this.logger.log({
-          msg: 'No ENS record found, deleting pending upload',
+          msg: 'ENS authorization still pending, deleting pending upload',
           subname,
           network,
           fileType,
@@ -162,10 +163,9 @@ export class AvatarVerificationService {
         return true;
       }
 
-      if (ensOwner.toLowerCase() === address.toLowerCase()) {
-        // ENS record matches uploader - verification successful
+      if (authorization === 'allowed') {
         this.logger.log({
-          msg: 'ENS record verified, upload confirmed',
+          msg: 'ENS authorization verified, upload confirmed',
           subname,
           network,
           fileType,
@@ -176,14 +176,12 @@ export class AvatarVerificationService {
         return false;
       }
 
-      // ENS record exists but doesn't match uploader - delete the pending upload
       this.logger.log({
-        msg: 'ENS record does not match uploader, deleting pending upload',
+        msg: 'Uploader is not authorized, deleting pending upload',
         subname,
         network,
         fileType,
         uploader: address,
-        ensOwner,
       });
       await this.deleteUploadAndRemoveFromQueue(subname, network, fileType);
       this.recordOutcome(item, 'discarded_owner_mismatch');

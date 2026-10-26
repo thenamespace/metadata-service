@@ -4,12 +4,24 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createPublicClient, http } from 'viem';
+import {
+  Address,
+  createPublicClient,
+  http,
+  isAddress,
+  zeroAddress,
+} from 'viem';
 import { mainnet, sepolia } from 'viem/chains';
 import { getEnsAddress, normalize } from 'viem/ens';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 import { Network, isValidNetwork } from '../common/enums/network.enum';
 import { AvatarObservabilityService } from '../observability/avatar-observability.service';
+import { FileType } from '../common/enums/file-type.enum';
+import {
+  EnsV2Contracts,
+  getEnsV2Authorization,
+  UploadAuthorization,
+} from './ens-v2-authorization';
 
 type CacheEntry = { owner: string; fetchedAt: number };
 
@@ -19,6 +31,7 @@ type CacheEntry = { owner: string; fetchedAt: number };
  */
 @Injectable()
 export class EnsService {
+  private readonly sepoliaV2?: EnsV2Contracts;
   private cache = new Map<string, CacheEntry>();
   private readonly ttlMs = 5 * 60 * 1000; // 5 minutes
   private readonly mainnetClient: ReturnType<typeof createPublicClient>;
@@ -28,6 +41,31 @@ export class EnsService {
     private readonly config: ConfigService,
     private readonly observability: AvatarObservabilityService,
   ) {
+    const helper = this.config.get<string>('ENS_SEPOLIA_UNIVERSAL_HELPER');
+    const v1Resolver = this.config.get<string>('ENS_SEPOLIA_V1_RESOLVER');
+    const publicResolver = this.config.get<string>(
+      'ENS_SEPOLIA_PUBLIC_RESOLVER_V2',
+    );
+    if (helper || v1Resolver || publicResolver) {
+      const valid = (value: string | undefined): value is Address =>
+        !!value &&
+        isAddress(value, { strict: false }) &&
+        value.toLowerCase() !== zeroAddress;
+      if (
+        !valid(helper) ||
+        !valid(v1Resolver) ||
+        (publicResolver && !valid(publicResolver))
+      ) {
+        throw new Error(
+          'ENS Sepolia V2 requires valid helper and V1 resolver addresses',
+        );
+      }
+      this.sepoliaV2 = {
+        helper,
+        v1Resolver,
+        publicResolver: publicResolver as Address | undefined,
+      };
+    }
     const alchemyApiKey = this.config.get<string>('ALCHEMY_API_KEY');
     const mainnetRpcUrl = this.config.get<string>('ETH_MAINNET_RPC_URL');
     const sepoliaRpcUrl = this.config.get<string>('ETH_SEPOLIA_RPC_URL');
@@ -61,8 +99,9 @@ export class EnsService {
     subname: string;
     address: string;
     network: Network;
+    recordKey: FileType;
   }): Promise<void> {
-    const { subname, address, network } = params;
+    const { subname, network } = params;
 
     if (!isValidNetwork(network)) {
       throw new BadRequestException({
@@ -93,13 +132,51 @@ export class EnsService {
         details: { subname },
       });
     }
-    const owner = await this.getDefaultAddressRecord(normalized, network);
-    if (!owner || owner.toLowerCase() !== address.toLowerCase()) {
+    const authorization = await this.getUploadAuthorization({
+      ...params,
+      subname: normalized,
+    });
+    if (authorization !== 'allowed') {
       throw new ForbiddenException({
         code: ErrorCodes.NOT_SUBNAME_OWNER,
         details: { subname, network },
       });
     }
+  }
+
+  async getUploadAuthorization(params: {
+    subname: string;
+    network: Network;
+    address: string;
+    recordKey: FileType;
+  }): Promise<UploadAuthorization> {
+    const { subname, network, address, recordKey } = params;
+    if (!isValidNetwork(network)) {
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+      });
+    }
+    if (network === Network.SEPOLIA && this.sepoliaV2) {
+      let name: string;
+      try {
+        name = normalize(subname.trim());
+      } catch {
+        throw new BadRequestException({
+          code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        });
+      }
+      const decision = await getEnsV2Authorization(
+        this.sepoliaClient,
+        this.sepoliaV2,
+        name,
+        address as Address,
+        recordKey,
+      );
+      if (decision !== null) return decision;
+    }
+    const owner = await this.getOwnerOrNull({ subname, network });
+    if (owner === null) return 'pending';
+    return owner.toLowerCase() === address.toLowerCase() ? 'allowed' : 'denied';
   }
 
   /**

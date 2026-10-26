@@ -236,11 +236,14 @@ export class AvatarController {
         expectedChainId: this.chainIdForNetwork(network),
       });
 
-    // Check if ENS record exists
-    const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
+    const authorization = await this.ensService.getUploadAuthorization({
+      subname,
+      network,
+      address: verifiedAddress,
+      recordKey: FileType.AVATAR,
+    });
 
-    if (ensOwner === null) {
-      // ENS record doesn't exist - pending upload flow
+    if (authorization === 'pending') {
       const existingFile = await this.storageService.getFileBuffer(
         subname,
         network,
@@ -299,8 +302,7 @@ export class AvatarController {
           'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
       };
     } else {
-      // ENS record exists - verify ownership
-      if (ensOwner.toLowerCase() !== verifiedAddress.toLowerCase()) {
+      if (authorization === 'denied') {
         throw new ForbiddenException({
           code: ErrorCodes.NOT_SUBNAME_OWNER,
           details: { subname, network },
@@ -392,6 +394,7 @@ export class AvatarController {
       subname,
       address: verifiedAddress,
       network: network,
+      recordKey: FileType.AVATAR,
     });
 
     const deleted = await this.avatarService.delete(
@@ -546,11 +549,14 @@ export class AvatarController {
         expectedChainId: this.chainIdForNetwork(network),
       });
 
-    // Check if ENS record exists
-    const ensOwner = await this.ensService.getOwnerOrNull({ subname, network });
+    const authorization = await this.ensService.getUploadAuthorization({
+      subname,
+      network,
+      address: verifiedAddress,
+      recordKey: FileType.HEADER,
+    });
 
-    if (ensOwner === null) {
-      // ENS record doesn't exist - pending upload flow
+    if (authorization === 'pending') {
       const existingFile = await this.storageService.getFileBuffer(
         subname,
         network,
@@ -609,8 +615,7 @@ export class AvatarController {
           'Upload queued for verification. Set your ENS record within 5 minutes to confirm.',
       };
     } else {
-      // ENS record exists - verify ownership
-      if (ensOwner.toLowerCase() !== verifiedAddress.toLowerCase()) {
+      if (authorization === 'denied') {
         throw new ForbiddenException({
           code: ErrorCodes.NOT_SUBNAME_OWNER,
           details: { subname, network },
@@ -702,6 +707,7 @@ export class AvatarController {
       subname,
       address: verifiedAddress,
       network: network,
+      recordKey: FileType.HEADER,
     });
 
     const deleted = await this.avatarService.delete(
