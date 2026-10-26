@@ -265,6 +265,7 @@ export class AvatarController {
         FileType.AVATAR,
       );
       const queueEntry: IPendingUploadEntry = {
+        generation: result.generation,
         subname,
         network,
         address: verifiedAddress,
@@ -309,13 +310,25 @@ export class AvatarController {
         });
       }
 
-      // Proceed with immediate upload
+      const pending = await this.queueService.get(
+        subname,
+        network,
+        FileType.AVATAR,
+      );
       const result: UploadResult = await this.avatarService.upload(
         subname,
         network,
         req,
         FileType.AVATAR,
       );
+      if (pending) {
+        await this.queueService.remove(
+          subname,
+          network,
+          FileType.AVATAR,
+          pending.generation,
+        );
+      }
       this.recordUploadEvent(
         FileType.AVATAR,
         subname,
@@ -578,6 +591,7 @@ export class AvatarController {
         FileType.HEADER,
       );
       const queueEntry: IPendingUploadEntry = {
+        generation: result.generation,
         subname,
         network,
         address: verifiedAddress,
@@ -622,13 +636,25 @@ export class AvatarController {
         });
       }
 
-      // Proceed with immediate upload
+      const pending = await this.queueService.get(
+        subname,
+        network,
+        FileType.HEADER,
+      );
       const result: UploadResult = await this.avatarService.upload(
         subname,
         network,
         req,
         FileType.HEADER,
       );
+      if (pending) {
+        await this.queueService.remove(
+          subname,
+          network,
+          FileType.HEADER,
+          pending.generation,
+        );
+      }
       this.recordUploadEvent(
         FileType.HEADER,
         subname,

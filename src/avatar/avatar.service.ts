@@ -44,6 +44,7 @@ function isStreamFile(f: unknown): f is MultipartStreamFile {
 }
 
 export interface UploadResult {
+  generation: string;
   url: string;
   uploadedAt: string;
   fileSize: number;
@@ -90,7 +91,13 @@ export class AvatarService {
     );
     const isUpdate = !!existingFile;
 
-    await this.storageService.save(subname, network, buffer, type, mimetype);
+    const generation = await this.storageService.save(
+      subname,
+      network,
+      buffer,
+      type,
+      mimetype,
+    );
     const timestamp = isUpdate ? Date.now().toString() : undefined;
     const url = this.storageService.getPublicUrl(
       subname,
@@ -109,6 +116,7 @@ export class AvatarService {
       size: buffer.length,
     });
     return {
+      generation,
       url,
       uploadedAt: new Date().toISOString(),
       fileSize: buffer.length,

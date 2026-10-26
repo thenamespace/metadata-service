@@ -4,6 +4,7 @@ import { StorageService } from './storage.service';
 
 describe('StorageService header paths', () => {
   const file = {
+    metadata: { generation: '123' as string | undefined },
     save: jest.fn().mockResolvedValue(undefined),
     delete: jest.fn().mockResolvedValue(undefined),
     exists: jest.fn().mockResolvedValue([true]),
@@ -18,6 +19,8 @@ describe('StorageService header paths', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    file.metadata.generation = '123';
+    file.delete.mockResolvedValue(undefined);
     Object.defineProperty(service, 'bucketName', {
       configurable: true,
       value: 'avtr.cc',
@@ -26,6 +29,61 @@ describe('StorageService header paths', () => {
       configurable: true,
       value: storage,
     });
+  });
+
+  it('returns the generation from the upload response without a racy metadata read', async () => {
+    await expect(
+      service.save(
+        'example.eth',
+        Network.SEPOLIA,
+        Buffer.from('image'),
+        FileType.AVATAR,
+        'image/png',
+      ),
+    ).resolves.toBe('123');
+    expect(file.getMetadata).not.toHaveBeenCalled();
+  });
+
+  it('rejects an upload result without a generation', async () => {
+    file.metadata.generation = undefined;
+    await expect(
+      service.save(
+        'example.eth',
+        Network.SEPOLIA,
+        Buffer.from('image'),
+        FileType.AVATAR,
+        'image/png',
+      ),
+    ).rejects.toThrow('generation');
+  });
+
+  it('deletes only the queued generation', async () => {
+    await expect(
+      service.delete('example.eth', Network.SEPOLIA, FileType.AVATAR, '123'),
+    ).resolves.toBe(true);
+    expect(file.delete).toHaveBeenCalledWith({ ifGenerationMatch: '123' });
+  });
+
+  it.each([404, 412])(
+    'treats conditional deletion status %s as already gone or replaced',
+    async (code) => {
+      file.delete.mockRejectedValue(
+        Object.assign(new Error('Object changed'), { code }),
+      );
+      await expect(
+        service.delete('example.eth', Network.SEPOLIA, FileType.AVATAR, '123'),
+      ).resolves.toBe(false);
+    },
+  );
+
+  it('propagates storage failures so pending cleanup can retry', async () => {
+    const error = Object.assign(new Error('Storage unavailable'), {
+      code: 503,
+    });
+    file.delete.mockRejectedValue(error);
+    await expect(
+      service.delete('example.eth', Network.SEPOLIA, FileType.AVATAR, '123'),
+    ).rejects.toBe(error);
   });
 
   it('returns compact public header URLs on both networks', () => {

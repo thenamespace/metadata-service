@@ -200,7 +200,7 @@ export class AvatarObservabilityService {
     operation: 'read' | 'save' | 'delete',
     mediaType: FileType,
     network: Network,
-    outcome: 'success' | 'not_found' | 'error',
+    outcome: 'success' | 'not_found' | 'error' | 'superseded',
     durationSeconds: number,
   ): void {
     this.storageOperations.inc({

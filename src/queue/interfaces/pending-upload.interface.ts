@@ -5,6 +5,7 @@ import { FileType } from '../../common/enums/file-type.enum';
  * Represents a pending upload awaiting ENS verification
  */
 export interface IPendingUploadEntry {
+  generation: string;
   subname: string;
   network: Network;
   address: string;
@@ -35,6 +36,7 @@ export interface IPendingUploadQueue {
     subname: string,
     network: Network,
     fileType: FileType,
+    expectedGeneration?: string,
   ): Promise<boolean>;
 
   /**

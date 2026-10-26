@@ -9,6 +9,7 @@ import { AvatarObservabilityService } from '../observability/avatar-observabilit
 type GoogleStorageLike = {
   bucket: (name: string) => {
     file: (path: string) => {
+      metadata: { generation?: string | number };
       save: (
         buffer: Buffer,
         opts: {
@@ -16,7 +17,7 @@ type GoogleStorageLike = {
           resumable?: boolean;
         },
       ) => Promise<void>;
-      delete: () => Promise<void>;
+      delete: (options?: { ifGenerationMatch: string }) => Promise<void>;
       exists: () => Promise<[boolean]>;
       download: () => Promise<[Buffer]>;
       getMetadata: () => Promise<[{ contentType?: string }]>;
@@ -115,7 +116,7 @@ export class StorageService {
     buffer: Buffer,
     type: FileType = FileType.AVATAR,
     contentType: string,
-  ): Promise<void> {
+  ): Promise<string> {
     const startedAt = process.hrtime.bigint();
     const filePath = this.getFilePath(subname, network, type);
 
@@ -132,7 +133,13 @@ export class StorageService {
         },
         resumable: false,
       });
+      // Use the upload response, not a metadata lookup that could see a replacement.
+      const generation = file.metadata.generation;
+      if (generation === undefined) {
+        throw new Error('Storage upload did not return a generation');
+      }
       this.recordStorage('save', type, network, 'success', startedAt);
+      return String(generation);
     } catch (error) {
       this.recordStorage('save', type, network, 'error', startedAt);
       throw error;
@@ -146,6 +153,7 @@ export class StorageService {
     subname: string,
     network: Network,
     type: FileType = FileType.AVATAR,
+    generation?: string,
   ): Promise<boolean> {
     const startedAt = process.hrtime.bigint();
     const filePath = this.getFilePath(subname, network, type);
@@ -161,10 +169,30 @@ export class StorageService {
         this.recordStorage('delete', type, network, 'not_found', startedAt);
         return false;
       }
-      await file.delete();
+      if (generation !== undefined) {
+        await file.delete({ ifGenerationMatch: generation });
+      } else {
+        await file.delete();
+      }
       this.recordStorage('delete', type, network, 'success', startedAt);
       return true;
     } catch (error) {
+      if (
+        generation !== undefined &&
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error.code === 404 || error.code === 412)
+      ) {
+        this.recordStorage(
+          'delete',
+          type,
+          network,
+          error.code === 412 ? 'superseded' : 'not_found',
+          startedAt,
+        );
+        return false;
+      }
       this.recordStorage('delete', type, network, 'error', startedAt);
       throw error;
     }
@@ -211,7 +239,7 @@ export class StorageService {
     operation: 'read' | 'save' | 'delete',
     type: FileType,
     network: Network,
-    outcome: 'success' | 'not_found' | 'error',
+    outcome: 'success' | 'not_found' | 'error' | 'superseded',
     startedAt: bigint,
   ): void {
     this.observability?.recordStorage(
