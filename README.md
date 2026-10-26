@@ -127,43 +127,12 @@ base64 < private-key.pem | tr -d '\n'
 Avatar uploads are limited to 2 MiB and header uploads to 5 MiB. The multipart
 server also enforces a 5 MiB limit per request.
 
-## ENSv2 avatar authorization on Sepolia
+## Avatar authorization
 
-Mainnet retains the existing ETH-address-based authorization. Sepolia also uses
-that behavior until both `ENS_SEPOLIA_UNIVERSAL_HELPER` and
-`ENS_SEPOLIA_V1_RESOLVER` are configured. Invalid or incomplete V2 configuration
-prevents startup. `ENS_SEPOLIA_PUBLIC_RESOLVER_V2` is optional and enables delegated
-editor checks for that deployment's PublicResolverV2.
-
-The following public addresses were verified against Sepolia and ENS deployment
-commit `07e55a056f5b6a9c90119f501bdd05714e67dddd`:
-
-| Variable | Sepolia address |
-| --- | --- |
-| `ENS_SEPOLIA_UNIVERSAL_HELPER` | `0xd453e5bdb62cc3bea84341b1e306319c8ffd7dfe` |
-| `ENS_SEPOLIA_V1_RESOLVER` | `0x322b7581ca210a69c6d0e0d7c88a7688d2789cb0` |
-| `ENS_SEPOLIA_PUBLIC_RESOLVER_V2` | `0xdc4a563d00f5c3012b699794eb9e13a561be386f` |
-
-Verify addresses against the [deployment artifacts](https://github.com/ensdomains/contracts-v2/tree/07e55a056f5b6a9c90119f501bdd05714e67dddd/contracts/deployments/sepolia)
-before enabling this on another deployment. Each V2 authorization checks that
-the helper and canonical Universal Resolver use the same root registry.
-
-V1 names routed through the configured V1 mirror retain their current address
-checks and pending-upload behavior. V2 names accept the exact owner or a supported
-resolver's editor for `avatar` or `header`. PermissionedResolver text-key grants
-include resolver-wide grants. An ETH address alone never authorizes a V2 upload.
-Unsupported editor interfaces fail the lookup rather than falling back to V1.
-
-Uploads before registration remain possible. An ownerless name with no resolver,
-or with a supported resolver but no editor permission or ETH address, can enter
-the existing pending flow. An existing file still prevents a pending overwrite.
-Pending verification rechecks the uploader's authority; RPC failures leave the
-entry queued for retry. The existing five-minute minimum wait remains unchanged.
-
-Enable these variables in Sepolia staging first. Mainnet V2 activation requires
-a separate change. To disable the Sepolia V2 path, remove all three variables;
-this restores the previous address-based policy, so it is not a substitute for
-V2 owner/editor checks. No infrastructure configuration is changed by this code.
+V1 names retain the existing ETH-address check. V2 names accept the owner or an
+editor authorized for the relevant avatar/header record. Uploads before name
+creation retain the pending verification flow. Supported V2 deployments are
+listed in `src/ens/ens-contracts.ts`; mainnet behavior is unchanged.
 
 ## API
 

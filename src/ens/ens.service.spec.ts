@@ -15,10 +15,6 @@ jest.mock('./ens-v2-authorization', () => ({
 }));
 
 const wallet = '0x0000000000000000000000000000000000000001';
-const config = {
-  ENS_SEPOLIA_UNIVERSAL_HELPER: '0x0000000000000000000000000000000000000030',
-  ENS_SEPOLIA_V1_RESOLVER: '0x0000000000000000000000000000000000000040',
-};
 const request = {
   subname: 'example.eth',
   network: Network.SEPOLIA,
@@ -26,8 +22,8 @@ const request = {
   recordKey: FileType.AVATAR,
 };
 
-function service(settings: Record<string, string> = {}) {
-  return new EnsService(new ConfigService(settings), {
+function service() {
+  return new EnsService(new ConfigService(), {
     recordEnsLookup: jest.fn(),
   } as unknown as AvatarObservabilityService);
 }
@@ -43,17 +39,20 @@ describe('ENS upload authorization routing', () => {
     'preserves legacy address behavior for %s',
     async (resolved, expected) => {
       jest.mocked(getEnsAddress).mockResolvedValue(resolved);
-      await expect(service().getUploadAuthorization(request)).resolves.toBe(
-        expected,
-      );
+      await expect(
+        service().getUploadAuthorization({
+          ...request,
+          network: Network.MAINNET,
+        }),
+      ).resolves.toBe(expected);
       expect(getEnsV2Authorization).not.toHaveBeenCalled();
     },
   );
 
-  it('keeps mainnet on the legacy path when Sepolia V2 is configured', async () => {
+  it('keeps mainnet on the legacy path', async () => {
     jest.mocked(getEnsAddress).mockResolvedValue(wallet);
     await expect(
-      service(config).getUploadAuthorization({
+      service().getUploadAuthorization({
         ...request,
         network: Network.MAINNET,
       }),
@@ -64,7 +63,7 @@ describe('ENS upload authorization routing', () => {
   it('uses the legacy path for a confirmed V1 mirror route on Sepolia', async () => {
     jest.mocked(getEnsV2Authorization).mockResolvedValue(null);
     jest.mocked(getEnsAddress).mockResolvedValue(wallet);
-    await expect(service(config).getUploadAuthorization(request)).resolves.toBe(
+    await expect(service().getUploadAuthorization(request)).resolves.toBe(
       'allowed',
     );
     expect(getEnsAddress).toHaveBeenCalledTimes(1);
@@ -75,9 +74,9 @@ describe('ENS upload authorization routing', () => {
     async (decision) => {
       jest.mocked(getEnsV2Authorization).mockResolvedValue(decision);
       jest.mocked(getEnsAddress).mockResolvedValue(wallet);
-      await expect(
-        service(config).getUploadAuthorization(request),
-      ).resolves.toBe(decision);
+      await expect(service().getUploadAuthorization(request)).resolves.toBe(
+        decision,
+      );
       expect(getEnsAddress).not.toHaveBeenCalled();
     },
   );
@@ -85,17 +84,25 @@ describe('ENS upload authorization routing', () => {
   it('does not fall back after a V2 lookup failure', async () => {
     const failure = new Error('RPC unavailable');
     jest.mocked(getEnsV2Authorization).mockRejectedValue(failure);
-    await expect(service(config).getUploadAuthorization(request)).rejects.toBe(
+    await expect(service().getUploadAuthorization(request)).rejects.toBe(
       failure,
     );
     expect(getEnsAddress).not.toHaveBeenCalled();
   });
 
-  it('rejects incomplete V2 configuration at startup', () => {
-    expect(() =>
-      service({
-        ENS_SEPOLIA_UNIVERSAL_HELPER: config.ENS_SEPOLIA_UNIVERSAL_HELPER,
+  it('selects the V2 deployment automatically without environment configuration', async () => {
+    jest.mocked(getEnsV2Authorization).mockResolvedValue('allowed');
+    await expect(service().getUploadAuthorization(request)).resolves.toBe(
+      'allowed',
+    );
+    expect(getEnsV2Authorization).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        helper: '0xd453e5bdb62cc3bea84341b1e306319c8ffd7dfe',
       }),
-    ).toThrow('ENS Sepolia V2 requires');
+      request.subname,
+      wallet,
+      FileType.AVATAR,
+    );
   });
 });
