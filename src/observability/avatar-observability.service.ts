@@ -1,8 +1,4 @@
-import {
-  HttpException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 import { FileType } from '../common/enums/file-type.enum';
 import { Network } from '../common/enums/network.enum';
@@ -179,7 +175,14 @@ export class AvatarObservabilityService {
   recordEnsLookup(
     network: Network,
     cacheStatus: 'hit' | 'miss' | 'not_applicable',
-    outcome: 'found' | 'not_found' | 'invalid_name' | 'rpc_error',
+    outcome:
+      | 'found'
+      | 'not_found'
+      | 'invalid_name'
+      | 'rpc_error'
+      | 'allowed'
+      | 'denied'
+      | 'pending',
     durationSeconds: number,
   ): void {
     this.ensLookups.inc({

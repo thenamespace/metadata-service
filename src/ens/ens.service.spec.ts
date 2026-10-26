@@ -22,9 +22,11 @@ const request = {
   recordKey: FileType.AVATAR,
 };
 
+const recordEnsLookup = jest.fn();
+
 function service() {
   return new EnsService(new ConfigService(), {
-    recordEnsLookup: jest.fn(),
+    recordEnsLookup,
   } as unknown as AvatarObservabilityService);
 }
 
@@ -46,6 +48,7 @@ describe('ENS upload authorization routing', () => {
         }),
       ).resolves.toBe(expected);
       expect(getEnsV2Authorization).not.toHaveBeenCalled();
+      expect(recordEnsLookup).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -60,13 +63,14 @@ describe('ENS upload authorization routing', () => {
     expect(getEnsV2Authorization).not.toHaveBeenCalled();
   });
 
-  it('uses the legacy path for a confirmed V1 mirror route on Sepolia', async () => {
-    jest.mocked(getEnsV2Authorization).mockResolvedValue(null);
+  it('does not reuse the legacy address cache on V2-enabled networks', async () => {
+    const ens = service();
     jest.mocked(getEnsAddress).mockResolvedValue(wallet);
-    await expect(service().getUploadAuthorization(request)).resolves.toBe(
-      'allowed',
-    );
-    expect(getEnsAddress).toHaveBeenCalledTimes(1);
+    await ens.getOwnerOrNull(request);
+    jest.mocked(getEnsAddress).mockClear();
+    jest.mocked(getEnsV2Authorization).mockResolvedValue('denied');
+    await expect(ens.getUploadAuthorization(request)).resolves.toBe('denied');
+    expect(getEnsAddress).not.toHaveBeenCalled();
   });
 
   it.each(['allowed', 'denied', 'pending'] as const)(
@@ -78,6 +82,13 @@ describe('ENS upload authorization routing', () => {
         decision,
       );
       expect(getEnsAddress).not.toHaveBeenCalled();
+      expect(recordEnsLookup).toHaveBeenCalledTimes(1);
+      expect(recordEnsLookup).toHaveBeenCalledWith(
+        Network.SEPOLIA,
+        'not_applicable',
+        decision,
+        expect.any(Number),
+      );
     },
   );
 
@@ -88,6 +99,30 @@ describe('ENS upload authorization routing', () => {
       failure,
     );
     expect(getEnsAddress).not.toHaveBeenCalled();
+    expect(recordEnsLookup).toHaveBeenCalledTimes(1);
+    expect(recordEnsLookup).toHaveBeenCalledWith(
+      Network.SEPOLIA,
+      'not_applicable',
+      'rpc_error',
+      expect.any(Number),
+    );
+  });
+
+  it('records invalid V2 names without making an RPC lookup', async () => {
+    await expect(
+      service().getUploadAuthorization({
+        ...request,
+        subname: 'bad name.eth',
+      }),
+    ).rejects.toThrow();
+    expect(getEnsV2Authorization).not.toHaveBeenCalled();
+    expect(recordEnsLookup).toHaveBeenCalledTimes(1);
+    expect(recordEnsLookup).toHaveBeenCalledWith(
+      Network.SEPOLIA,
+      'not_applicable',
+      'invalid_name',
+      expect.any(Number),
+    );
   });
 
   it('selects the V2 deployment automatically without environment configuration', async () => {

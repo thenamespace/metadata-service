@@ -126,22 +126,45 @@ export class EnsService {
     }
     const contracts = ENS_V2_CONTRACTS[network];
     if (contracts) {
+      const startedAt = process.hrtime.bigint();
       let name: string;
       try {
         name = normalize(subname.trim());
       } catch {
+        this.observability.recordEnsLookup(
+          network,
+          'not_applicable',
+          'invalid_name',
+          Number(process.hrtime.bigint() - startedAt) / 1e9,
+        );
         throw new BadRequestException({
           code: ErrorCodes.INVALID_SUBNAME_FORMAT,
         });
       }
-      const decision = await getEnsV2Authorization(
-        network === Network.MAINNET ? this.mainnetClient : this.sepoliaClient,
-        contracts,
-        name,
-        address as Address,
-        recordKey,
-      );
-      if (decision !== null) return decision;
+      try {
+        const decision = await getEnsV2Authorization(
+          network === Network.MAINNET ? this.mainnetClient : this.sepoliaClient,
+          contracts,
+          name,
+          address as Address,
+          recordKey,
+        );
+        this.observability.recordEnsLookup(
+          network,
+          'not_applicable',
+          decision,
+          Number(process.hrtime.bigint() - startedAt) / 1e9,
+        );
+        return decision;
+      } catch (error) {
+        this.observability.recordEnsLookup(
+          network,
+          'not_applicable',
+          'rpc_error',
+          Number(process.hrtime.bigint() - startedAt) / 1e9,
+        );
+        throw error;
+      }
     }
     const owner = await this.getOwnerOrNull({ subname, network });
     if (owner === null) return 'pending';

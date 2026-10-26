@@ -30,14 +30,13 @@ const abi = parseAbi([
   'function canModifyName(bytes32 node, address operator) view returns (bool)',
 ]);
 
-/** Returns null only when the authoritative route still uses the V1 mirror. */
 export async function getEnsV2Authorization(
   client: ReturnType<typeof createPublicClient>,
   contracts: EnsV2Contracts,
   name: string,
   wallet: Address,
   recordKey: FileType,
-): Promise<UploadAuthorization | null> {
+): Promise<UploadAuthorization> {
   const universalResolver =
     client.chain?.contracts?.ensUniversalResolver?.address;
   if (!universalResolver) {
@@ -87,7 +86,14 @@ export async function getEnsV2Authorization(
   });
   if (resolver.toLowerCase() === contracts.v1Resolver.toLowerCase()) {
     // A registered V2 name must never regain address-based authorization.
-    return owner === zeroAddress ? null : 'denied';
+    if (owner !== zeroAddress) return 'denied';
+    // Keep the V1 address read at the same block as the route check. Never use
+    // the legacy cache, which may contain a result from before migration.
+    const address = await getEnsAddress(client, { name, blockNumber });
+    if (address === null) return 'pending';
+    return address.toLowerCase() === wallet.toLowerCase()
+      ? 'allowed'
+      : 'denied';
   }
   if (resolver === zeroAddress)
     return owner === zeroAddress ? 'pending' : 'denied';

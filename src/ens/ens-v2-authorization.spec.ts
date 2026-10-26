@@ -76,13 +76,46 @@ describe('ENS V2 upload authorization', () => {
 
   it('allows V1 fallback only for an ownerless name routed through the V1 mirror', async () => {
     const mirror = [contracts.v1Resolver, namehash('example.eth'), 0n];
-    await expect(
-      fixture({ findResolver: mirror }).authorize(),
-    ).resolves.toBeNull();
+    await expect(fixture({ findResolver: mirror }).authorize()).resolves.toBe(
+      'pending',
+    );
     await expect(
       fixture({
         findResolver: mirror,
         findExactOwner: otherWallet,
+      }).authorize(),
+    ).resolves.toBe('denied');
+  });
+
+  it.each([
+    [wallet, 'allowed'],
+    [otherWallet, 'denied'],
+    [null, 'pending'],
+  ] as const)(
+    'uses the V1 address rule at the checked block for %s',
+    async (address, expected) => {
+      jest.mocked(getEnsAddress).mockResolvedValue(address);
+      await expect(
+        fixture({
+          findResolver: [contracts.v1Resolver, namehash('example.eth'), 0n],
+        }).authorize(),
+      ).resolves.toBe(expected);
+      expect(getEnsAddress).toHaveBeenCalledWith(expect.anything(), {
+        name: 'example.eth',
+        blockNumber: 123n,
+      });
+    },
+  );
+
+  it('does not authorize a new V2 address when migration happens after the route check', async () => {
+    jest
+      .mocked(getEnsAddress)
+      .mockImplementation((_client, params) =>
+        Promise.resolve(params.blockNumber === 123n ? otherWallet : wallet),
+      );
+    await expect(
+      fixture({
+        findResolver: [contracts.v1Resolver, namehash('example.eth'), 0n],
       }).authorize(),
     ).resolves.toBe('denied');
   });
