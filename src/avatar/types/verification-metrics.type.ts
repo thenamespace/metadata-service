@@ -5,7 +5,6 @@ export interface IVerificationMetrics {
   processed: number;
   verified: number;
   deleted: number;
-  superseded: number;
   errors: number;
 }
 
@@ -18,3 +17,4 @@ export enum VerificationResult {
   DELETED_MISMATCH = 'DELETED_MISMATCH',
   ERROR = 'ERROR',
 }
+

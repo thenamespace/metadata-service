@@ -63,15 +63,8 @@ export class PendingUploadQueueService implements IPendingUploadQueue {
     subname: string,
     network: Network,
     fileType: FileType,
-    expectedGeneration?: string,
   ): Promise<boolean> {
     const key = this.getKey(subname, network, fileType);
-    if (
-      expectedGeneration !== undefined &&
-      this.queue.get(key)?.generation !== expectedGeneration
-    ) {
-      return false;
-    }
     const deleted = this.queue.delete(key);
     this.observability.setPendingQueueSize(this.queue.size);
     if (deleted) {

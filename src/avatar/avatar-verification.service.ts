@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EnsService } from '../ens/ens.service';
 import { StorageService } from '../storage/storage.service';
+import { Network } from '../common/enums/network.enum';
+import { FileType } from '../common/enums/file-type.enum';
 import { PendingUploadQueueService, IPendingUploadEntry } from '../queue';
 import { IVerificationMetrics } from './types/verification-metrics.type';
 import { MIN_WAIT_TIME_MS } from './constants/verification.constants';
@@ -90,14 +92,17 @@ export class AvatarVerificationService {
       processed: itemsToProcess.length,
       verified: 0,
       deleted: 0,
-      superseded: 0,
       errors: 0,
     };
 
     for (const item of itemsToProcess) {
       try {
-        const outcome = await this.verifyItem(item);
-        metrics[outcome]++;
+        const wasDeleted = await this.verifyItem(item);
+        if (wasDeleted) {
+          metrics.deleted++;
+        } else {
+          metrics.verified++;
+        }
       } catch (error) {
         metrics.errors++;
         this.logger.error({
@@ -123,11 +128,9 @@ export class AvatarVerificationService {
    * - If authorization is still pending or denied: Delete the pending upload
    * - If a lookup fails: Leave the upload queued for retry
    *
-   * Cleanup only applies to the queued storage generation.
+   * @returns true if the upload was deleted, false if it was verified
    */
-  private async verifyItem(
-    item: IPendingUploadEntry,
-  ): Promise<'verified' | 'deleted' | 'superseded'> {
+  private async verifyItem(item: IPendingUploadEntry): Promise<boolean> {
     const { subname, network, address, fileType, uploadedAt } = item;
 
     this.logger.log({
@@ -155,12 +158,9 @@ export class AvatarVerificationService {
           network,
           fileType,
         });
-        const deleted = await this.deleteUploadAndRemoveFromQueue(item);
-        this.recordOutcome(
-          item,
-          deleted ? 'discarded_no_record' : 'superseded',
-        );
-        return deleted ? 'deleted' : 'superseded';
+        await this.deleteUploadAndRemoveFromQueue(subname, network, fileType);
+        this.recordOutcome(item, 'discarded_no_record');
+        return true;
       }
 
       if (authorization === 'allowed') {
@@ -171,14 +171,9 @@ export class AvatarVerificationService {
           fileType,
           address,
         });
-        const removed = await this.queueService.remove(
-          subname,
-          network,
-          fileType,
-          item.generation,
-        );
-        this.recordOutcome(item, removed ? 'confirmed' : 'superseded');
-        return removed ? 'verified' : 'superseded';
+        await this.queueService.remove(subname, network, fileType);
+        this.recordOutcome(item, 'confirmed');
+        return false;
       }
 
       this.logger.log({
@@ -188,12 +183,9 @@ export class AvatarVerificationService {
         fileType,
         uploader: address,
       });
-      const deleted = await this.deleteUploadAndRemoveFromQueue(item);
-      this.recordOutcome(
-        item,
-        deleted ? 'discarded_owner_mismatch' : 'superseded',
-      );
-      return deleted ? 'deleted' : 'superseded';
+      await this.deleteUploadAndRemoveFromQueue(subname, network, fileType);
+      this.recordOutcome(item, 'discarded_owner_mismatch');
+      return true;
     } catch (error) {
       // Log error and rethrow - let caller handle it
       this.logger.error({
@@ -212,17 +204,37 @@ export class AvatarVerificationService {
    * Delete file from storage and remove from queue
    */
   private async deleteUploadAndRemoveFromQueue(
-    item: IPendingUploadEntry,
-  ): Promise<boolean> {
-    const { subname, network, fileType, generation } = item;
-    const deleted = await this.storageService.delete(
-      subname,
-      network,
-      fileType,
-      generation,
-    );
-    await this.queueService.remove(subname, network, fileType, generation);
-    return deleted;
+    subname: string,
+    network: Network,
+    fileType: FileType,
+  ): Promise<void> {
+    try {
+      // Delete from storage
+      const deleted = await this.storageService.delete(
+        subname,
+        network,
+        fileType,
+      );
+      this.logger.log({
+        msg: 'Deleted pending upload from storage',
+        subname,
+        network,
+        fileType,
+        deleted,
+      });
+    } catch (error) {
+      this.logger.error({
+        msg: 'Error deleting from storage',
+        subname,
+        network,
+        fileType,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue to remove from queue even if storage deletion fails
+    }
+
+    // Remove from queue
+    await this.queueService.remove(subname, network, fileType);
   }
 
   private recordOutcome(
@@ -231,7 +243,6 @@ export class AvatarVerificationService {
       | 'confirmed'
       | 'discarded_no_record'
       | 'discarded_owner_mismatch'
-      | 'superseded'
       | 'error',
   ): void {
     this.observability.recordPending(item.fileType, item.network, outcome);

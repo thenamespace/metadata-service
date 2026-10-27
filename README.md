@@ -132,12 +132,10 @@ server also enforces a 5 MiB limit per request.
 V1 names retain the existing ETH-address check. V2 names accept the owner or an
 editor authorized for the relevant avatar/header record. Uploads before name
 creation retain the pending verification flow. Supported V2 deployments are
-listed in `src/ens/ens-contracts.ts`; mainnet authorization is unchanged.
+listed in `src/ens/ens-contracts.ts`; mainnet behavior is unchanged.
 
 V2 authorization uses one block for all reads, including V1 fallback, and records
 `allowed`, `denied`, `pending`, or `rpc_error` in ENS lookup metrics.
-Pending cleanup matches the original storage generation so it cannot delete a
-replacement upload. Storage failures leave the entry queued for retry.
 
 ## API
 
