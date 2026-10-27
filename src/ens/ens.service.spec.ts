@@ -6,14 +6,6 @@ import { FileType } from '../common/enums/file-type.enum';
 import { AvatarObservabilityService } from '../observability/avatar-observability.service';
 import { getEnsV2Authorization } from './ens-v2-authorization';
 import { EnsService } from './ens.service';
-import { ENS_V2_CONTRACTS } from './ens-contracts';
-
-jest.mock('./ens-contracts', () => ({
-  ENS_V2_CONTRACTS: {
-    ...jest.requireActual<typeof import('./ens-contracts')>('./ens-contracts')
-      .ENS_V2_CONTRACTS,
-  },
-}));
 
 jest.mock('viem/ens', () => ({
   ...jest.requireActual<typeof import('viem/ens')>('viem/ens'),
@@ -41,43 +33,6 @@ function service() {
 
 describe('ENS upload authorization routing', () => {
   beforeEach(() => jest.resetAllMocks());
-
-  it.each([
-    [wallet, 'allowed'],
-    ['0x0000000000000000000000000000000000000002', 'denied'],
-    [null, 'pending'],
-  ] as const)(
-    'preserves legacy address behavior for %s',
-    async (resolved, expected) => {
-      jest.mocked(getEnsAddress).mockResolvedValue(resolved);
-      await expect(
-        service().getUploadAuthorization({
-          ...request,
-          network: Network.MAINNET,
-        }),
-      ).resolves.toBe(expected);
-      expect(getEnsV2Authorization).not.toHaveBeenCalled();
-      expect(recordEnsLookup).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it.each([FileType.AVATAR, FileType.HEADER])(
-    'keeps mainnet %s authorization on the legacy path',
-    async (recordKey) => {
-      jest.mocked(getEnsAddress).mockResolvedValue(wallet);
-      await expect(
-        service().getUploadAuthorization({
-          ...request,
-          network: Network.MAINNET,
-          recordKey,
-        }),
-      ).resolves.toBe('allowed');
-      expect(getEnsV2Authorization).not.toHaveBeenCalled();
-      expect(getEnsAddress).toHaveBeenCalledWith(expect.anything(), {
-        name: request.subname,
-      });
-    },
-  );
 
   it('does not reuse the legacy address cache on V2-enabled networks', async () => {
     const ens = service();
@@ -157,22 +112,8 @@ describe('ENS upload authorization routing', () => {
     );
   });
 
-  describe('mainnet with a future verified deployment', () => {
-    // Synthetic addresses exist only in the mocked deployment map.
-    const mainnetContracts = {
-      helper: '0x0000000000000000000000000000000000000030',
-      v1Resolver: '0x0000000000000000000000000000000000000040',
-      publicResolver: '0x0000000000000000000000000000000000000050',
-    } as const;
+  describe('mainnet deployment', () => {
     const mainnetRequest = { ...request, network: Network.MAINNET };
-
-    beforeEach(() => {
-      ENS_V2_CONTRACTS[Network.MAINNET] = mainnetContracts;
-    });
-
-    afterEach(() => {
-      delete ENS_V2_CONTRACTS[Network.MAINNET];
-    });
 
     it.each([FileType.AVATAR, FileType.HEADER])(
       'routes %s through the mainnet client and deployment',
@@ -183,7 +124,11 @@ describe('ENS upload authorization routing', () => {
         ).resolves.toBe('allowed');
         expect(getEnsV2Authorization).toHaveBeenCalledWith(
           expect.objectContaining({ chain: mainnet }),
-          mainnetContracts,
+          {
+            helper: '0x46ae127d14683ac74ef151e46ae2117a1a25c676',
+            v1Resolver: '0x394d8eb4a4fdf599384deab25f31d111d755c398',
+            publicResolver: '0x66f9f566ff2f26309c1bd9134388478a801da3e1',
+          },
           request.subname,
           wallet,
           recordKey,
