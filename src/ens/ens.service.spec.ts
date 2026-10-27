@@ -52,16 +52,23 @@ describe('ENS upload authorization routing', () => {
     },
   );
 
-  it('keeps mainnet on the legacy path', async () => {
-    jest.mocked(getEnsAddress).mockResolvedValue(wallet);
-    await expect(
-      service().getUploadAuthorization({
-        ...request,
-        network: Network.MAINNET,
-      }),
-    ).resolves.toBe('allowed');
-    expect(getEnsV2Authorization).not.toHaveBeenCalled();
-  });
+  it.each([FileType.AVATAR, FileType.HEADER])(
+    'keeps mainnet %s authorization on the legacy path',
+    async (recordKey) => {
+      jest.mocked(getEnsAddress).mockResolvedValue(wallet);
+      await expect(
+        service().getUploadAuthorization({
+          ...request,
+          network: Network.MAINNET,
+          recordKey,
+        }),
+      ).resolves.toBe('allowed');
+      expect(getEnsV2Authorization).not.toHaveBeenCalled();
+      expect(getEnsAddress).toHaveBeenCalledWith(expect.anything(), {
+        name: request.subname,
+      });
+    },
+  );
 
   it('does not reuse the legacy address cache on V2-enabled networks', async () => {
     const ens = service();

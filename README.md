@@ -129,13 +129,22 @@ server also enforces a 5 MiB limit per request.
 
 ## Avatar authorization
 
-V1 names retain the existing ETH-address check. V2 names accept the owner or an
-editor authorized for the relevant avatar/header record. Uploads before name
-creation retain the pending verification flow. Supported V2 deployments are
-listed in `src/ens/ens-contracts.ts`; mainnet behavior is unchanged.
+ENSv2 avatar and header authorization is enabled **only on Sepolia** for now.
 
-V2 authorization uses one block for all reads, including V1 fallback, and records
-`allowed`, `denied`, `pending`, or `rpc_error` in ENS lookup metrics.
+| Network | Chain ID   | Authorization                                                                                                                                    |
+| ------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sepolia | `11155111` | ENSv2 owner or editor with permission for the relevant avatar/header record; V1 names routed through the V1 mirror retain the ETH-address check. |
+| Mainnet | `1`        | Existing ETH-address check only. ENSv2 authorization is not enabled.                                                                             |
+
+The deployment map in `src/ens/ens-contracts.ts` contains only Sepolia.
+Accepting mainnet SIWE signatures does not enable ENSv2 there.
+
+Uploads before name creation retain the pending verification flow, including
+uncreated children that inherit a PublicResolverV2 from their parent.
+
+Sepolia V2 authorization uses one block for all reads, including V1 fallback,
+and records `allowed`, `denied`, `pending`, or `rpc_error` in ENS lookup
+metrics.
 
 ## API
 
