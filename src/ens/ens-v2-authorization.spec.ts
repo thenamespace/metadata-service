@@ -10,7 +10,7 @@ import {
   toHex,
   zeroAddress,
 } from 'viem';
-import { sepolia } from 'viem/chains';
+import { mainnet, sepolia } from 'viem/chains';
 import { getEnsAddress, packetToBytes } from 'viem/ens';
 import { FileType } from '../common/enums/file-type.enum';
 import { EnsV2Contracts, getEnsV2Authorization } from './ens-v2-authorization';
@@ -37,7 +37,10 @@ interface ContractRead {
   blockNumber: bigint;
 }
 
-function fixture(overrides: Record<string, unknown> = {}) {
+function createFixture(
+  chain: typeof mainnet | typeof sepolia,
+  overrides: Record<string, unknown> = {},
+) {
   const responses: Record<string, unknown> = {
     ROOT_REGISTRY: root,
     findExactOwner: zeroAddress,
@@ -51,7 +54,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
     Promise.resolve(responses[functionName]),
   );
   const client = {
-    chain: sepolia,
+    chain,
     getBlockNumber: jest.fn().mockResolvedValue(123n),
     readContract,
   } as unknown as ReturnType<typeof createPublicClient>;
@@ -63,7 +66,10 @@ function fixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('ENS V2 upload authorization', () => {
+describe.each([mainnet, sepolia])('ENSv2 authorization on $name', (chain) => {
+  const fixture = (overrides: Record<string, unknown> = {}) =>
+    createFixture(chain, overrides);
+
   beforeEach(() => {
     jest.resetAllMocks();
     jest.mocked(getEnsAddress).mockResolvedValue(null);

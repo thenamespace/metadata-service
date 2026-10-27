@@ -146,6 +146,22 @@ Sepolia V2 authorization uses one block for all reads, including V1 fallback,
 and records `allowed`, `denied`, `pending`, or `rpc_error` in ENS lookup
 metrics.
 
+### Mainnet ENSv2 activation
+
+Mainnet preparation is awaiting verified ENSv2 deployment addresses. To enable
+it, add a `Network.MAINNET` entry to `ENS_V2_CONTRACTS` with the mainnet helper,
+V1 mirror resolver, and PublicResolverV2 addresses. Verify that the helper and
+the Universal Resolver configured by viem use the same nonzero root registry,
+and confirm their interfaces match the authorization calls before activation.
+Do not use Sepolia or placeholder addresses for mainnet.
+
+The existing service selects the mainnet client when that entry is present.
+Profile routes, SIWE chain ID `1`, and environment variables stay the same.
+
+Before rollout, verify owner and avatar/header editor access, revoked and
+unrelated signer rejection, V1 mirror compatibility, and pending uploads on
+mainnet. Include signed upload/delete requests and storage verification.
+
 ## API
 
 The Swagger UI is the canonical, interactive API reference. The summary below

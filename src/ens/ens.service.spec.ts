@@ -1,10 +1,19 @@
 import { ConfigService } from '@nestjs/config';
 import { getEnsAddress } from 'viem/ens';
+import { mainnet } from 'viem/chains';
 import { Network } from '../common/enums/network.enum';
 import { FileType } from '../common/enums/file-type.enum';
 import { AvatarObservabilityService } from '../observability/avatar-observability.service';
 import { getEnsV2Authorization } from './ens-v2-authorization';
 import { EnsService } from './ens.service';
+import { ENS_V2_CONTRACTS } from './ens-contracts';
+
+jest.mock('./ens-contracts', () => ({
+  ENS_V2_CONTRACTS: {
+    ...jest.requireActual<typeof import('./ens-contracts')>('./ens-contracts')
+      .ENS_V2_CONTRACTS,
+  },
+}));
 
 jest.mock('viem/ens', () => ({
   ...jest.requireActual<typeof import('viem/ens')>('viem/ens'),
@@ -146,5 +155,79 @@ describe('ENS upload authorization routing', () => {
       wallet,
       FileType.AVATAR,
     );
+  });
+
+  describe('mainnet with a future verified deployment', () => {
+    // Synthetic addresses exist only in the mocked deployment map.
+    const mainnetContracts = {
+      helper: '0x0000000000000000000000000000000000000030',
+      v1Resolver: '0x0000000000000000000000000000000000000040',
+      publicResolver: '0x0000000000000000000000000000000000000050',
+    } as const;
+    const mainnetRequest = { ...request, network: Network.MAINNET };
+
+    beforeEach(() => {
+      ENS_V2_CONTRACTS[Network.MAINNET] = mainnetContracts;
+    });
+
+    afterEach(() => {
+      delete ENS_V2_CONTRACTS[Network.MAINNET];
+    });
+
+    it.each([FileType.AVATAR, FileType.HEADER])(
+      'routes %s through the mainnet client and deployment',
+      async (recordKey) => {
+        jest.mocked(getEnsV2Authorization).mockResolvedValue('allowed');
+        await expect(
+          service().getUploadAuthorization({ ...mainnetRequest, recordKey }),
+        ).resolves.toBe('allowed');
+        expect(getEnsV2Authorization).toHaveBeenCalledWith(
+          expect.objectContaining({ chain: mainnet }),
+          mainnetContracts,
+          request.subname,
+          wallet,
+          recordKey,
+        );
+        expect(getEnsAddress).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['allowed', 'denied', 'pending'] as const)(
+      'preserves %s after a cached legacy authorization',
+      async (decision) => {
+        const ens = service();
+        jest.mocked(getEnsAddress).mockResolvedValue(wallet);
+        await ens.getOwnerOrNull(mainnetRequest);
+        jest.mocked(getEnsAddress).mockClear();
+        recordEnsLookup.mockClear();
+        jest.mocked(getEnsV2Authorization).mockResolvedValue(decision);
+        await expect(ens.getUploadAuthorization(mainnetRequest)).resolves.toBe(
+          decision,
+        );
+        expect(getEnsAddress).not.toHaveBeenCalled();
+        expect(recordEnsLookup).toHaveBeenCalledTimes(1);
+        expect(recordEnsLookup).toHaveBeenCalledWith(
+          Network.MAINNET,
+          'not_applicable',
+          decision,
+          expect.any(Number),
+        );
+      },
+    );
+
+    it('propagates mainnet V2 failures without legacy fallback', async () => {
+      const failure = new Error('Mainnet RPC unavailable');
+      jest.mocked(getEnsV2Authorization).mockRejectedValue(failure);
+      await expect(
+        service().getUploadAuthorization(mainnetRequest),
+      ).rejects.toBe(failure);
+      expect(getEnsAddress).not.toHaveBeenCalled();
+      expect(recordEnsLookup).toHaveBeenCalledWith(
+        Network.MAINNET,
+        'not_applicable',
+        'rpc_error',
+        expect.any(Number),
+      );
+    });
   });
 });
