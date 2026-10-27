@@ -1,13 +1,17 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import {
+  ContractFunctionRevertedError,
   createPublicClient,
+  encodeErrorResult,
   keccak256,
   namehash,
+  parseAbi,
   stringToHex,
+  toHex,
   zeroAddress,
 } from 'viem';
 import { sepolia } from 'viem/chains';
-import { getEnsAddress } from 'viem/ens';
+import { getEnsAddress, packetToBytes } from 'viem/ens';
 import { FileType } from '../common/enums/file-type.enum';
 import { EnsV2Contracts, getEnsV2Authorization } from './ens-v2-authorization';
 
@@ -52,6 +56,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
     readContract,
   } as unknown as ReturnType<typeof createPublicClient>;
   return {
+    client,
     readContract,
     authorize: (key = FileType.AVATAR) =>
       getEnsV2Authorization(client, contracts, 'example.eth', wallet, key),
@@ -173,6 +178,49 @@ describe('ENS V2 upload authorization', () => {
   it('does not authorize an ownerless V2 name through a matching address record', async () => {
     jest.mocked(getEnsAddress).mockResolvedValue(wallet);
     await expect(fixture().authorize()).resolves.toBe('denied');
+  });
+
+  it.each([FileType.AVATAR, FileType.HEADER])(
+    'stages %s before creation when PublicResolverV2 is inherited',
+    async (key) => {
+      const { client, authorize, readContract } = fixture({
+        findResolver: [contracts.publicResolver, namehash('example.eth'), 8n],
+      });
+      jest.mocked(client.getBlockNumber).mockResolvedValue(12000000n);
+      jest
+        .mocked(getEnsAddress)
+        .mockImplementation(
+          jest.requireActual<typeof import('viem/ens')>('viem/ens')
+            .getEnsAddress,
+        );
+      const errorAbi = parseAbi(['error ResolverNotFound(bytes name)']);
+      const resolverNotFound = new ContractFunctionRevertedError({
+        abi: errorAbi,
+        data: encodeErrorResult({
+          abi: errorAbi,
+          errorName: 'ResolverNotFound',
+          args: [toHex(packetToBytes('example.eth'))],
+        }),
+        functionName: 'resolveWithGateways',
+      });
+      const originalRead = readContract.getMockImplementation()!;
+      readContract.mockImplementation((call) =>
+        call.functionName === 'resolveWithGateways'
+          ? Promise.reject(resolverNotFound)
+          : originalRead(call),
+      );
+
+      await expect(authorize(key)).resolves.toBe('pending');
+    },
+  );
+
+  it('denies a nonowner when an existing name inherits PublicResolverV2', async () => {
+    await expect(
+      fixture({
+        findExactOwner: otherWallet,
+        findResolver: [contracts.publicResolver, namehash('example.eth'), 8n],
+      }).authorize(),
+    ).resolves.toBe('denied');
   });
 
   it('propagates an address lookup failure instead of staging an ownerless upload', async () => {

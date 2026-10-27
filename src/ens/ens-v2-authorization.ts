@@ -77,7 +77,7 @@ export async function getEnsV2Authorization(
   if (owner !== zeroAddress && owner.toLowerCase() === wallet.toLowerCase())
     return 'allowed';
 
-  const [resolver] = await client.readContract({
+  const [resolver, , offset] = await client.readContract({
     address: universalResolver,
     abi,
     functionName: 'findResolver',
@@ -100,6 +100,8 @@ export async function getEnsV2Authorization(
 
   let allowed: boolean;
   if (contracts.publicResolver?.toLowerCase() === resolver.toLowerCase()) {
+    // PublicResolverV2 cannot resolve descendants through wildcard inheritance.
+    if (offset !== 0n) return owner === zeroAddress ? 'pending' : 'denied';
     allowed = await client.readContract({
       address: resolver,
       abi,
