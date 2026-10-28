@@ -140,7 +140,7 @@ V1 names routed through the V1 mirror retain the ETH-address check. A matching
 address record alone does not authorize writes to a V2 name.
 
 The deployment map in `src/ens/ens-contracts.ts` selects the contracts for each
-network. Mainnet addresses come from the [official ENS deployment artifacts](https://github.com/ensdomains/contracts-v2/tree/4f47cbcc11462fb413196e6b5c0f8090247a6c08/contracts/deployments/mainnet).
+network using `@thenamespace/addresses`, pinned to version `1.3.0`.
 The helper and active Universal Resolver must use the same nonzero root registry;
 a mismatch fails the request without falling back to legacy authorization.
 

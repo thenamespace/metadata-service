@@ -104,7 +104,9 @@ describe('ENS upload authorization routing', () => {
     expect(getEnsV2Authorization).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        helper: '0xd453e5bdb62cc3bea84341b1e306319c8ffd7dfe',
+        helper: '0xd453e5Bdb62CC3beA84341B1e306319C8Ffd7DFe',
+        v1Resolver: '0x322B7581cA210a69c6D0e0D7c88a7688D2789Cb0',
+        publicResolver: '0xdC4a563d00F5c3012b699794eB9e13A561Be386F',
       }),
       request.subname,
       wallet,
@@ -125,9 +127,9 @@ describe('ENS upload authorization routing', () => {
         expect(getEnsV2Authorization).toHaveBeenCalledWith(
           expect.objectContaining({ chain: mainnet }),
           {
-            helper: '0x46ae127d14683ac74ef151e46ae2117a1a25c676',
-            v1Resolver: '0x394d8eb4a4fdf599384deab25f31d111d755c398',
-            publicResolver: '0x66f9f566ff2f26309c1bd9134388478a801da3e1',
+            helper: '0x46AE127D14683Ac74eF151e46ae2117A1A25C676',
+            v1Resolver: '0x394D8EB4a4fDF599384DeAb25F31d111d755c398',
+            publicResolver: '0x66f9F566fF2f26309C1Bd9134388478A801dA3e1',
           },
           request.subname,
           wallet,
