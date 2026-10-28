@@ -136,7 +136,8 @@ ENSv2 avatar and header authorization is enabled **only on Sepolia** for now.
 | Sepolia | `11155111` | ENSv2 owner or editor with permission for the relevant avatar/header record; V1 names routed through the V1 mirror retain the ETH-address check. |
 | Mainnet | `1`        | Existing ETH-address check only. ENSv2 authorization is not enabled.                                                                             |
 
-The deployment map in `src/ens/ens-contracts.ts` contains only Sepolia.
+The deployment map in `src/ens/ens-contracts.ts` selects only Sepolia from
+`@thenamespace/addresses`, pinned to version `1.3.0`.
 Accepting mainnet SIWE signatures does not enable ENSv2 there.
 
 Uploads before name creation retain the pending verification flow, including
