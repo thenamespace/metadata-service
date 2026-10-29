@@ -4,12 +4,18 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createPublicClient, http } from 'viem';
+import { Address, createPublicClient, http } from 'viem';
 import { mainnet, sepolia } from 'viem/chains';
 import { getEnsAddress, normalize } from 'viem/ens';
 import { ErrorCodes } from '../common/enums/error-codes.enum';
 import { Network, isValidNetwork } from '../common/enums/network.enum';
 import { AvatarObservabilityService } from '../observability/avatar-observability.service';
+import { FileType } from '../common/enums/file-type.enum';
+import {
+  getEnsV2Authorization,
+  UploadAuthorization,
+} from './ens-v2-authorization';
+import { ENS_V2_CONTRACTS } from './ens-contracts';
 
 type CacheEntry = { owner: string; fetchedAt: number };
 
@@ -61,8 +67,9 @@ export class EnsService {
     subname: string;
     address: string;
     network: Network;
+    recordKey: FileType;
   }): Promise<void> {
-    const { subname, address, network } = params;
+    const { subname, network } = params;
 
     if (!isValidNetwork(network)) {
       throw new BadRequestException({
@@ -93,13 +100,75 @@ export class EnsService {
         details: { subname },
       });
     }
-    const owner = await this.getDefaultAddressRecord(normalized, network);
-    if (!owner || owner.toLowerCase() !== address.toLowerCase()) {
+    const authorization = await this.getUploadAuthorization({
+      ...params,
+      subname: normalized,
+    });
+    if (authorization !== 'allowed') {
       throw new ForbiddenException({
         code: ErrorCodes.NOT_SUBNAME_OWNER,
         details: { subname, network },
       });
     }
+  }
+
+  async getUploadAuthorization(params: {
+    subname: string;
+    network: Network;
+    address: string;
+    recordKey: FileType;
+  }): Promise<UploadAuthorization> {
+    const { subname, network, address, recordKey } = params;
+    if (!isValidNetwork(network)) {
+      throw new BadRequestException({
+        code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+      });
+    }
+    const contracts = ENS_V2_CONTRACTS[network];
+    if (contracts) {
+      const startedAt = process.hrtime.bigint();
+      let name: string;
+      try {
+        name = normalize(subname.trim());
+      } catch {
+        this.observability.recordEnsLookup(
+          network,
+          'not_applicable',
+          'invalid_name',
+          Number(process.hrtime.bigint() - startedAt) / 1e9,
+        );
+        throw new BadRequestException({
+          code: ErrorCodes.INVALID_SUBNAME_FORMAT,
+        });
+      }
+      try {
+        const decision = await getEnsV2Authorization(
+          network === Network.MAINNET ? this.mainnetClient : this.sepoliaClient,
+          contracts,
+          name,
+          address as Address,
+          recordKey,
+        );
+        this.observability.recordEnsLookup(
+          network,
+          'not_applicable',
+          decision,
+          Number(process.hrtime.bigint() - startedAt) / 1e9,
+        );
+        return decision;
+      } catch (error) {
+        this.observability.recordEnsLookup(
+          network,
+          'not_applicable',
+          'rpc_error',
+          Number(process.hrtime.bigint() - startedAt) / 1e9,
+        );
+        throw error;
+      }
+    }
+    const owner = await this.getOwnerOrNull({ subname, network });
+    if (owner === null) return 'pending';
+    return owner.toLowerCase() === address.toLowerCase() ? 'allowed' : 'denied';
   }
 
   /**

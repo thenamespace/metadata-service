@@ -127,6 +127,31 @@ base64 < private-key.pem | tr -d '\n'
 Avatar uploads are limited to 2 MiB and header uploads to 5 MiB. The multipart
 server also enforces a 5 MiB limit per request.
 
+## Avatar authorization
+
+ENSv2 avatar and header authorization is enabled on Mainnet and Sepolia.
+
+| Network | Chain ID | Authorization |
+| ------- | -------- | ------------- |
+| Mainnet | `1` | ENSv2 owner or editor with permission for the relevant avatar/header record. |
+| Sepolia | `11155111` | ENSv2 owner or editor with permission for the relevant avatar/header record. |
+
+V1 names routed through the V1 mirror retain the ETH-address check. A matching
+address record alone does not authorize writes to a V2 name.
+
+The deployment map in `src/ens/ens-contracts.ts` selects the contracts for each
+network using `@thenamespace/addresses`, pinned to version `1.3.0`.
+The helper and active Universal Resolver must use the same nonzero root registry;
+a mismatch fails the request without falling back to legacy authorization.
+
+Uploads before name creation retain the pending verification flow, including
+uncreated children that inherit a PublicResolverV2 from their parent.
+
+V2 authorization uses one block for all reads, including V1 fallback, bypasses
+the legacy address cache, and records `allowed`, `denied`, `pending`, or
+`rpc_error` in ENS lookup metrics. Profile routes, SIWE chain IDs, and environment
+variables are unchanged.
+
 ## API
 
 The Swagger UI is the canonical, interactive API reference. The summary below
@@ -169,9 +194,9 @@ Request:
 `network` must be `mainnet` (chain ID `1`) or `sepolia` (chain ID `11155111`).
 Uploads accept JPEG, PNG, GIF, WebP, and SVG images.
 
-If an ENS address record exists, it must match the verified signer. If the
-record does not exist yet, the upload is held as pending for five minutes while
-the service waits for the record to be set.
+The verified signer must pass the network-specific authorization checks above.
+Uploads for names not yet created can remain pending for five minutes while
+the service waits for authorization.
 
 ## Authentication flow
 
@@ -180,7 +205,7 @@ the service waits for the record to be set.
 2. Create and sign a SIWE v1 message containing that nonce.
 3. Send the original message, signature, and address with the protected request.
 4. The service verifies the signature, consumes the nonce for that action, and
-   checks the ENS address record.
+   checks ENS owner/editor permissions or the V1 address record, as applicable.
 
 A combined `avatar+header` nonce may be consumed once for each action. Reusing
 it for the same action is rejected. The SIWE message chain ID must match the
@@ -245,7 +270,7 @@ Client
 | `subnames`      | Fetches subname data from the indexer                   |
 | `auth`          | Issues nonces and verifies SIWE signatures              |
 | `avatar`        | Validates profile mutations and uploaded media          |
-| `ens`           | Resolves ENS address records on Mainnet and Sepolia     |
+| `ens`           | Verifies ENS owner/editor and V1 address authorization on Mainnet and Sepolia |
 | `storage`       | Reads and writes media in Google Cloud Storage          |
 | `observability` | Exposes request, verification, ENS, and storage metrics |
 
